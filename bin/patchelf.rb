@@ -1,3 +1,5 @@
 #!/usr/bin/env ruby
 
-puts 'a'
+require 'patchelf/cli'
+
+PatchELF::CLI.work(ARGV)

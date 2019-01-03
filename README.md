@@ -7,3 +7,5 @@ Simply execute:
 ```
 $ gem install patchelf
 ```
+
+## Usage
