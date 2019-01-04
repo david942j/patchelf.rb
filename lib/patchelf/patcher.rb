@@ -10,7 +10,7 @@ module PatchELF
     end
 
     # @param [:interpreter, :needed, :soname] name
-    # @return [void]
+    # @return [String, Array, nil]
     def print(name)
       case name
       when :interpreter then interp_name
@@ -23,10 +23,7 @@ module PatchELF
 
     def interp_name
       segment = @elf.segment_by_type(:interp)
-      if segment.nil?
-        PatchELF::Logger.warn('No interpreter found.')
-        return nil
-      end
+      return PatchELF::Logger.warn('No interpreter found.') if segment.nil?
 
       segment.interp_name
     end
@@ -35,7 +32,10 @@ module PatchELF
       segment = dynamic_or_log
       return if segment.nil?
 
-      segment.tag_by_type(:soname).name
+      tag = segment.tag_by_type(:soname)
+      return PatchELF::Logger.warn('No soname, not a shared library?') if tag.nil?
+
+      tag.name
     end
 
     def needed

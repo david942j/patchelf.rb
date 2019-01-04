@@ -17,13 +17,17 @@ module PatchELF
     # @param [Symbol] type
     #   Specify which kind of color to use, valid symbols are defined in {.COLOR_CODE}.
     # @return [String]
-    #   Wrapper with color codes.
+    #   String that wrapped with color codes.
     def colorize(str, type)
-      return str unless $stderr.tty?
+      return str unless color_enabled?
 
       cc = COLOR_CODE
       color = cc.key?(type) ? cc[type] : ''
       "#{color}#{str.sub(COLOR_CODE[:esc_m], color)}#{cc[:esc_m]}"
+    end
+
+    def color_enabled?
+      $stderr.tty?
     end
   end
 end

@@ -1,6 +1,7 @@
 require 'optparse'
 
 require 'patchelf/patcher'
+require 'patchelf/version'
 
 module PatchELF
   # For command line interface to parsing arguments.
@@ -25,14 +26,17 @@ module PatchELF
       @options = {
         print: []
       }
-      parse(argv)
+      return $stdout.puts "PatchELF Version #{PatchELF::VERSION}" if argv.include?('--version')
+      return $stdout.puts option_parser unless parse(argv)
+
       # Now the options are (hopefully) valid, let's process the ELF file.
       patcher = PatchELF::Patcher.new(@options[:in_file])
+      # TODO: Handle ELFTools::ELFError
       @options[:print].uniq.each do |s|
         content = patcher.print(s)
         next if content.nil?
 
-        $stdout.puts "#{s.to_s.capitalize}: #{Array(content).join(', ')}"
+        $stdout.puts "#{s.to_s.capitalize}: #{Array(content).join(' ')}"
       end
     end
 
@@ -40,24 +44,26 @@ module PatchELF
 
     def parse(argv)
       remain = option_parser.permute(argv)
-      usage_and_exit if remain.first.nil?
+      return false if remain.first.nil?
+
       @options[:in_file] = remain.first
       @options[:out_file] = remain[1] || @options[:in_file]
+      true
     end
 
     def option_parser
       @option_parser ||= OptionParser.new do |opts|
         opts.banner = USAGE
 
-        opts.on('--print-interpreter', 'Show interpreter\'s name.') do
+        opts.on('--pi', '--print-interpreter', 'Show interpreter\'s name.') do
           @options[:print] << :interpreter
         end
 
-        opts.on('--print-needed', 'Show needed libraries specified in DT_NEEDED.') do
+        opts.on('--pn', '--print-needed', 'Show needed libraries specified in DT_NEEDED.') do
           @options[:print] << :needed
         end
 
-        opts.on('--print-soname', 'Show soname specified in DT_SONAME.') do
+        opts.on('--ps', '--print-soname', 'Show soname specified in DT_SONAME.') do
           @options[:print] << :soname
         end
 
@@ -65,16 +71,8 @@ module PatchELF
           @options[:interp] = interp
         end
 
-        opts.on('--version', 'Current gem version.') do
-          puts "PatchELF version #{PatchELF::VERSION}"
-          exit(0)
-        end
+        opts.on('--version', 'Show current gem\'s version.') {}
       end
-    end
-
-    def usage_and_exit
-      puts option_parser
-      exit(1)
     end
 
     extend self
