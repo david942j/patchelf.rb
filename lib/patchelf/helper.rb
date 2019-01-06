@@ -1,6 +1,9 @@
 module PatchELF
   # Helper methods for internal usage.
   module Helper
+    # The size of one page.
+    PAGE_SIZE = 0x1000
+
     module_function
 
     # Color codes for pretty print.
@@ -26,8 +29,24 @@ module PatchELF
       "#{color}#{str.sub(COLOR_CODE[:esc_m], color)}#{cc[:esc_m]}"
     end
 
+    # For {#colorize} to decide if need add color codes.
+    # @return [Boolean]
     def color_enabled?
       $stderr.tty?
+    end
+
+    # @param [Integer] val
+    # @param [Integer] align
+    # @return [Integer]
+    # @example
+    #   aligndown(0x1234)
+    #   #=> 4096
+    #   aligndown(0x33, 0x20)
+    #   #=> 32
+    #   aligndown(0x10, 0x8)
+    #   #=> 16
+    def aligndown(val, align = PAGE_SIZE)
+      val - (val & (align - 1))
     end
   end
 end

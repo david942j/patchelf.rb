@@ -74,7 +74,7 @@ module PatchELF
           @options[:print] << :soname
         end
 
-        opts.on('--set-interpreter INTERP', 'Set interpreter\'s name.') do |interp|
+        opts.on('--si INTERP', '--set-interpreter INTERP', 'Set interpreter\'s name.') do |interp|
           @options[:set][:interpreter] = interp
         end
 

@@ -3,7 +3,8 @@ sudo: required
 cache: bundler
 dist: trusty
 os:
-- linux
+  - linux
+  - osx
 rvm:
   - 2.3
   - 2.4

@@ -6,4 +6,10 @@ describe PatchELF::Helper do
     allow(described_class).to receive(:color_enabled?) { true }
     expect(described_class.colorize('msg', :warn)).to eq "\e[38;5;230mmsg\e[0m"
   end
+
+  it 'aligndown' do
+    expect(described_class.aligndown(0x1234)).to be 0x1000
+    expect(described_class.aligndown(0x33, 0x20)).to be 0x20
+    expect(described_class.aligndown(0x10, 0x8)).to be 0x10
+  end
 end

@@ -1,4 +1,10 @@
+require 'English'
+require 'fileutils'
+require 'securerandom'
 require 'simplecov'
+require 'tmpdir'
+require 'tty/platform'
+
 SimpleCov.formatter = SimpleCov::Formatter::MultiFormatter.new(
   [SimpleCov::Formatter::HTMLFormatter]
 )
@@ -23,13 +29,14 @@ module Helpers
   end
 
   def with_tempfile
-    require 'tmpdir'
-    require 'securerandom'
-    require 'fileutils'
     filename = File.join(Dir.tmpdir, 'patchelf-' + SecureRandom.hex(8))
     yield filename
   ensure
     FileUtils.rm_f(filename)
+  end
+
+  def linux_only!
+    skip 'Linux only' unless TTY::Platform.new.linux?
   end
 end
 

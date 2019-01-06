@@ -17,7 +17,8 @@ $ patchelf.rb
 #         --pi, --print-interpreter    Show interpreter's name.
 #         --pn, --print-needed         Show needed libraries specified in DT_NEEDED.
 #         --ps, --print-soname         Show soname specified in DT_SONAME.
-#         --set-interpreter INTERP     Set interpreter's name.
+#         --si, --set-interpreter INTERP
+#                                      Set interpreter's name.
 #         --version                    Show current gem's version.
 
 ```

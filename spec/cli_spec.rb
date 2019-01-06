@@ -25,4 +25,13 @@ PatchELF Version #{PatchELF::VERSION}
       described_class.__send__(:option_parser).help
     ).to_stdout
   end
+
+  it 'set interpreter' do
+    with_tempfile do |tmp|
+      described_class.work(%w[--si AAAAA spec/files/pie.elf] << tmp)
+      expect { hook_logger { described_class.work(['--pi', tmp]) } }.to output(<<-EOS).to_stdout
+Interpreter: AAAAA
+      EOS
+    end
+  end
 end

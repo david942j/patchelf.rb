@@ -2,7 +2,7 @@
 #include <stdio.h>
 
 int main() {
-  std::cout << "A" << std::endl;
+  std::cout << "It works!" << std::endl;
   scanf("%*c");
-  return 0;
+  return 217;
 }

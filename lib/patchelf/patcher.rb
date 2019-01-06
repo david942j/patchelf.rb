@@ -14,6 +14,7 @@ module PatchELF
     # @param [String] filename
     #   Filename of input ELF.
     def initialize(filename)
+      @in_file = filename
       @elf = ELFTools::ELFFile.new(File.open(filename))
       @set = {}
     end
@@ -60,25 +61,25 @@ module PatchELF
       # If nothing is modified, return directly.
       return if out_file.nil? && !dirty?
 
-      out_file ||= @elf.stream.path
+      out_file ||= @in_file
       # [{Integer => String}]
       @inline_patch = {}
       @mm = PatchELF::MM.new(@elf)
       # Patching interpreter is the easiest.
       patch_interpreter(@set[:interpreter])
 
-      @set.each do |key, val|
-      end
-
       @mm.dispatch!
-      FileUtils.cp(@elf.stream.path, out_file) if out_file != @elf.stream.path
+      FileUtils.cp(@in_file, out_file) if out_file != @in_file
 
       File.open(out_file, 'r+') do |f|
-        @elf.patches.merge(@inline_patch).each do |int, str|
-          f.pos = int
+        @elf.patches.merge(@inline_patch).each do |pos, str|
+          f.pos = pos
           f.write(str)
         end
       end
+
+      # Let output file have the same permission as input.
+      FileUtils.chmod(File.stat(@in_file).mode, out_file)
     end
 
     # Get name(s) of interpreter, needed libraries, rpath, or soname.
@@ -148,8 +149,7 @@ module PatchELF
       seg_header = @elf.segment_by_type(:interp).header
 
       patch = proc do |off, vaddr|
-        sec_header = section_header('.interp')
-        # Get file offset of the interp string, and register an inline patching
+        # Register an inline patching
         @inline_patch[off] = new_interp
 
         # The patching feature of ELFTools
@@ -157,21 +157,20 @@ module PatchELF
         seg_header.p_vaddr = seg_header.p_paddr = vaddr
         seg_header.p_filesz = seg_header.p_memsz = new_interp.size
 
+        sec_header = section_header('.interp')
         if sec_header
           sec_header.sh_offset = off
           sec_header.sh_size = new_interp.size
         end
       end
 
-      # easy case
       if new_interp.size <= old_interp.size
+        # easy case
         patch.call(seg_header.p_offset.to_i, seg_header.p_vaddr.to_i)
-        return
+      else
+        # hard case, we have to request a new LOAD area
+        @mm.malloc(new_interp.size, &patch)
       end
-
-      # hard case, we have to request a new LOAD area, and modify both INTERP and .interp
-      # accordingly.
-      @mm.malloc(new_interp.size + 1, &patch)
     end
 
     # @return [Boolean]
