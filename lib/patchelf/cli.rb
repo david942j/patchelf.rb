@@ -24,6 +24,7 @@ module PatchELF
     #   # version message to stdout
     def work(argv)
       @options = {
+        set: {},
         print: []
       }
       return $stdout.puts "PatchELF Version #{PatchELF::VERSION}" if argv.include?('--version')
@@ -33,11 +34,17 @@ module PatchELF
       patcher = PatchELF::Patcher.new(@options[:in_file])
       # TODO: Handle ELFTools::ELFError
       @options[:print].uniq.each do |s|
-        content = patcher.print(s)
+        content = patcher.get(s)
         next if content.nil?
 
         $stdout.puts "#{s.to_s.capitalize}: #{Array(content).join(' ')}"
       end
+
+      @options[:set].each do |sym, val|
+        patcher.__send__("#{sym}=".to_sym, val)
+      end
+
+      patcher.save(@options[:out_file])
     end
 
     private
@@ -47,7 +54,7 @@ module PatchELF
       return false if remain.first.nil?
 
       @options[:in_file] = remain.first
-      @options[:out_file] = remain[1] || @options[:in_file]
+      @options[:out_file] = remain[1] # can be nil
       true
     end
 
@@ -68,7 +75,7 @@ module PatchELF
         end
 
         opts.on('--set-interpreter INTERP', 'Set interpreter\'s name.') do |interp|
-          @options[:interp] = interp
+          @options[:set][:interpreter] = interp
         end
 
         opts.on('--version', 'Show current gem\'s version.') {}

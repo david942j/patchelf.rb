@@ -21,6 +21,16 @@ module Helpers
     PatchELF::Logger.instance_variable_set(:@logger, org_logger)
     ret
   end
+
+  def with_tempfile
+    require 'tmpdir'
+    require 'securerandom'
+    require 'fileutils'
+    filename = File.join(Dir.tmpdir, 'patchelf-' + SecureRandom.hex(8))
+    yield filename
+  ensure
+    FileUtils.rm_f(filename)
+  end
 end
 
 include Helpers

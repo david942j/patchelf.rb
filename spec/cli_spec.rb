@@ -10,7 +10,7 @@ describe PatchELF::CLI do
     end.to output(<<-EOS).to_stdout
 Interpreter: /lib64/ld-linux-x86-64.so.2
 Needed: libstdc++.so.6 libc.so.6
-[WARN] No soname, not a shared library?
+[WARN] Entry DT_SONAME not found, not a shared library?
     EOS
   end
 
