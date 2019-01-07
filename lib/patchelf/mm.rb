@@ -32,7 +32,7 @@ module PatchELF
     def dispatch!
       return if @request.empty?
 
-      request_size = @request.map(&:first).sum
+      request_size = @request.map(&:first).inject(0, :+)
       # TODO: raise exception if no LOAD exists.
 
       # We're going to expand the first LOAD segment.
@@ -93,7 +93,7 @@ module PatchELF
       # If gap is enough but not all zeros, we will fail on extension..
       # 2. gap is all zeroes.
       # @elf.stream.pos = gap.head
-      # return false unless @elf.stream.read(gap.size).bytes.sum.zero?
+      # return false unless @elf.stream.read(gap.size).bytes.inject(0, :+).zero?
 
       true
     end
