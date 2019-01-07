@@ -38,15 +38,31 @@ module PatchELF
     # @param [Integer] val
     # @param [Integer] align
     # @return [Integer]
+    #   Aligned result.
     # @example
-    #   aligndown(0x1234)
+    #   Helper.aligndown(0x1234)
     #   #=> 4096
-    #   aligndown(0x33, 0x20)
+    #   Helper.aligndown(0x33, 0x20)
     #   #=> 32
-    #   aligndown(0x10, 0x8)
+    #   Helper.aligndown(0x10, 0x8)
     #   #=> 16
     def aligndown(val, align = PAGE_SIZE)
       val - (val & (align - 1))
+    end
+
+    # @param [Integer] val
+    # @param [Integer] align
+    # @return [Integer]
+    #   Aligned result.
+    # @example
+    #   Helper.alignup(0x1234)
+    #   #=> 8192
+    #   Helper.alignup(0x33, 0x20)
+    #   #=> 64
+    #   Helper.alignup(0x10, 0x8)
+    #   #=> 16
+    def alignup(val, align = PAGE_SIZE)
+      (val & (align - 1)).zero? ? val : (aligndown(val, align) + align)
     end
   end
 end

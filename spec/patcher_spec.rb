@@ -15,6 +15,8 @@ describe PatchELF::Patcher do
     expect(patcher.get(:needed)).to eq %w[libstdc++.so.6 libc.so.6]
     expect { hook_logger { patcher.get(:interpreter) } }.to output("[WARN] No interpreter found.\n").to_stdout
 
+    expect(get_patcher('rpath.elf').get(:rpath)).to eq '/not_exists:/lib:/pusheen/is/fat'
+
     expect(get_patcher('pie.elf').get(:interpreter)).to eq '/lib64/ld-linux-x86-64.so.2'
   end
 
@@ -41,7 +43,7 @@ describe PatchELF::Patcher do
         %w[pie.elf nopie.elf].each do |f|
           test_interpreter(f, '~test~', tmp)
           test_interpreter(f, 'A' * 30, tmp) # slightly larger than the original interp
-          # test_interpreter(f, 'A' * 0x1001, tmp) # very large, need extend bin
+          test_interpreter(f, 'A' * 0x1001, tmp) # very large, need extend bin
         end
       end
     end
@@ -52,6 +54,7 @@ describe PatchELF::Patcher do
       with_tempfile do |tmp|
         %w[pie.elf nopie.elf].each do |f|
           patcher = get_patcher(f)
+          # TODO: buggy when 'A' * 0x1000..
           patcher.interpreter = patcher.get(:interpreter) + "\x00" + 'A' * 10
           patcher.save(tmp)
           expect(`#{tmp} < /dev/null`).to eq "It works!\n"

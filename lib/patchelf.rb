@@ -4,4 +4,5 @@
 module PatchELF
 end
 
+require 'patchelf/patcher'
 require 'patchelf/version'

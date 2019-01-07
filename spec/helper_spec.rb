@@ -12,4 +12,10 @@ describe PatchELF::Helper do
     expect(described_class.aligndown(0x33, 0x20)).to be 0x20
     expect(described_class.aligndown(0x10, 0x8)).to be 0x10
   end
+
+  it 'alignup' do
+    expect(described_class.alignup(0x1234)).to be 0x2000
+    expect(described_class.alignup(0x33, 0x20)).to be 0x40
+    expect(described_class.alignup(0x10, 0x8)).to be 0x10
+  end
 end

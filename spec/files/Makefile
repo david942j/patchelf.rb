@@ -1,8 +1,13 @@
-all: test.cpp
-	g++ -shared -fPIC -Wl,-soname,libtest.so.217 -o libtest.so test.cpp
-	g++ -static -o static.elf test.cpp
-	g++ -fPIE -pie -o pie.elf test.cpp
-	g++ -no-pie -o nopie.elf test.cpp
+GCC=g++
+SRC=test.cpp
+
+all: $(SRC)
+	$(GCC) $< -shared -fPIC -Wl,-soname,libtest.so.217 -o libtest.so
+	$(GCC) $< -static -o static.elf
+	$(GCC) $< -fPIE -pie -o pie.elf
+	$(GCC) $< -no-pie -o nopie.elf
+	$(GCC) $< -Wl,--disable-new-dtags -Wl,-rpath=/not_exists:/lib:/pusheen/is/fat -o rpath.elf
+	$(GCC) $< -Wl,--enable-new-dtags -Wl,-rpath=/not_exists:/lib:/pusheen/is/fat -o runpath.elf
 
 clean:
 	$(RM) *.elf *.so
