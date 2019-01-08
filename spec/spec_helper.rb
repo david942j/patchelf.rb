@@ -35,6 +35,10 @@ module Helpers
     FileUtils.rm_f(filename)
   end
 
+  def bin_path(filename)
+    File.join(__dir__, 'files', filename)
+  end
+
   def linux_only!
     skip 'Linux only' unless TTY::Platform.new.linux?
   end

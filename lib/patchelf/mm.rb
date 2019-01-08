@@ -130,7 +130,11 @@ module PatchELF
         sec.header.sh_offset += extend_size if sec.header.sh_offset >= threshold
       end
       @elf.each_segments do |seg|
-        seg.header.p_offset += extend_size if seg.header.p_offset >= threshold
+        next unless seg.header.p_offset >= threshold
+
+        seg.header.p_offset += extend_size
+        # We have to change align of LOAD segment since ld.so checks it.
+        seg.header.p_align = Helper::PAGE_SIZE if seg.is_a?(ELFTools::Segments::LoadSegment)
       end
 
       @elf.header.e_shoff += extend_size if @elf.header.e_shoff >= threshold

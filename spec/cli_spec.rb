@@ -5,7 +5,7 @@ describe PatchELF::CLI do
   it 'print' do
     expect do
       hook_logger do
-        described_class.work(%w[--pi --print-needed --print-soname spec/files/pie.elf])
+        described_class.work(%w[--pi --print-needed --print-soname] << bin_path('pie.elf'))
       end
     end.to output(<<-EOS).to_stdout
 Interpreter: /lib64/ld-linux-x86-64.so.2
@@ -28,9 +28,23 @@ PatchELF Version #{PatchELF::VERSION}
 
   it 'set interpreter' do
     with_tempfile do |tmp|
-      described_class.work(%w[--si AAAAA spec/files/pie.elf] << tmp)
+      described_class.work(['--interp', 'AAAAA', bin_path('pie.elf'), tmp])
       expect { hook_logger { described_class.work(['--pi', tmp]) } }.to output(<<-EOS).to_stdout
 Interpreter: AAAAA
+      EOS
+    end
+  end
+
+  it 'set soname' do
+    with_tempfile do |tmp|
+      expect { hook_logger { described_class.work(['--so', 'A', bin_path('pie.elf'), tmp]) } }
+        .to output(<<-EOS).to_stdout
+[WARN] Entry DT_SONAME not found, not a shared library?
+      EOS
+
+      described_class.work(['--so', 'XDD', bin_path('libtest.so'), tmp])
+      expect { hook_logger { described_class.work(['--ps', tmp]) } }.to output(<<-EOS).to_stdout
+Soname: XDD
       EOS
     end
   end

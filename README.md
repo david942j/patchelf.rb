@@ -22,8 +22,9 @@ $ patchelf.rb
 #         --pi, --print-interpreter    Show interpreter's name.
 #         --pn, --print-needed         Show needed libraries specified in DT_NEEDED.
 #         --ps, --print-soname         Show soname specified in DT_SONAME.
-#         --si, --set-interpreter INTERP
+#         --interp, --set-interpreter INTERP
 #                                      Set interpreter's name.
+#         --so, --set-soname SONAME    Set name of a shared library.
 #         --version                    Show current gem's version.
 
 ```
@@ -38,14 +39,20 @@ $ patchelf.rb --print-interpreter --print-needed /bin/ls
 
 ### Change the dynamic loader (interpreter)
 ```
-$ patchelf.rb --si /lib64/my-ld-linux-x86-64.so.2 program.elf output.elf
-```
-
-```
-$ patchelf.rb --si /lib64/AAAA.so /bin/ls ls.patch
+# $ patchelf.rb --interp NEW_INTERP input.elf output.elf
+$ patchelf.rb --interp /lib/AAAA.so /bin/ls ls.patch
 
 $ file ls.patch
-# ls.patch: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/AAAA.so, for GNU/Linux 3.2.0, BuildID[sha1]=9567f9a28e66f4d7ec4baf31cfbf68d0410f0ae6, stripped
+# ls.patch: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib/AAAA.so, for GNU/Linux 3.2.0, BuildID[sha1]=9567f9a28e66f4d7ec4baf31cfbf68d0410f0ae6, stripped
+
+```
+
+### Change SONAME of a shared library
+```
+$ patchelf.rb --so libc.so.217 /lib/x86_64-linux-gnu/libc.so.6 ./libc.patched
+
+$ readelf -d libc.patched | grep SONAME
+#  0x000000000000000e (SONAME)             Library soname: [libc.so.217]
 
 ```
 

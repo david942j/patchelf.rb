@@ -6,7 +6,7 @@ require 'patchelf/patcher'
 
 describe PatchELF::Patcher do
   def get_patcher(filename)
-    described_class.new(File.join(__dir__, 'files', filename))
+    described_class.new(bin_path(filename))
   end
 
   it 'get' do
@@ -21,16 +21,6 @@ describe PatchELF::Patcher do
   end
 
   describe 'interpreter=' do
-    def test_interpreter(file, str, filename)
-      patcher = get_patcher(file)
-      patcher.interpreter = str
-      patcher.save(filename)
-      expect(described_class.new(filename).get(:interpreter)).to eq str
-      File.open(filename) do |f|
-        expect(ELFTools::ELFFile.new(f).section_by_name('.interp').data).to eq str + "\x00"
-      end
-    end
-
     it 'no interpreter' do
       expect { hook_logger { get_patcher('libtest.so').interpreter = 'a' } }.to output(<<-EOS).to_stdout
 [WARN] No interpreter found.
@@ -38,12 +28,22 @@ describe PatchELF::Patcher do
     end
 
     it 'different patched length' do
+      test_proc = proc do |file, str, filename|
+        patcher = get_patcher(file)
+        patcher.interpreter = str
+        patcher.save(filename)
+        expect(described_class.new(filename).get(:interpreter)).to eq str
+        File.open(filename) do |f|
+          expect(ELFTools::ELFFile.new(f).section_by_name('.interp').data).to eq str + "\x00"
+        end
+      end
+
       with_tempfile do |tmp|
         # Both PIE and no-PIE should be tested
         %w[pie.elf nopie.elf].each do |f|
-          test_interpreter(f, '~test~', tmp)
-          test_interpreter(f, 'A' * 30, tmp) # slightly larger than the original interp
-          test_interpreter(f, 'A' * 0x1001, tmp) # very large, need extend bin
+          test_proc.call(f, '~test~', tmp)
+          test_proc.call(f, 'A' * 30, tmp) # slightly larger than the original interp
+          test_proc.call(f, 'A' * 0x1000, tmp) # very large, need extend bin
         end
       end
     end
@@ -51,16 +51,35 @@ describe PatchELF::Patcher do
     it 'still executable after patching' do
       linux_only!
 
-      with_tempfile do |tmp|
-        %w[pie.elf nopie.elf].each do |f|
+      %w[pie.elf nopie.elf].each do |f|
+        [0x100, 0xfff].each do |pad_len|
           patcher = get_patcher(f)
-          # TODO: buggy when 'A' * 0x1000..
-          patcher.interpreter = patcher.get(:interpreter) + "\x00" + 'A' * 10
-          patcher.save(tmp)
-          expect(`#{tmp} < /dev/null`).to eq "It works!\n"
-          expect($CHILD_STATUS.exitstatus).to eq 217
+          patcher.interpreter = (patcher.get(:interpreter) + "\x00").ljust(pad_len, 'A')
+          with_tempfile do |tmp|
+            patcher.save(tmp)
+            expect(`#{tmp} < /dev/null`).to eq "It works!\n"
+            expect($CHILD_STATUS.exitstatus).to eq 217
+          end
         end
       end
+    end
+  end
+
+  describe 'soname=' do
+    it 'different length' do
+      test_proc = proc do |name|
+        with_tempfile do |tmp|
+          patcher = get_patcher('libtest.so')
+          patcher.soname = name
+          patcher.save(tmp)
+          expect(described_class.new(tmp).get(:soname)).to eq name
+        end
+      end
+
+      test_proc.call('so.217') # exists string
+      test_proc.call('short.so')
+      test_proc.call('.so'.rjust(0x10, 'long'))
+      test_proc.call('.so'.rjust(0x1000, 'super-long'))
     end
   end
 end

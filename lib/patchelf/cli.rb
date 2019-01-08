@@ -74,8 +74,12 @@ module PatchELF
           @options[:print] << :soname
         end
 
-        opts.on('--si INTERP', '--set-interpreter INTERP', 'Set interpreter\'s name.') do |interp|
+        opts.on('--interp INTERP', '--set-interpreter INTERP', 'Set interpreter\'s name.') do |interp|
           @options[:set][:interpreter] = interp
+        end
+
+        opts.on('--so SONAME', '--set-soname SONAME', 'Set name of a shared library.') do |soname|
+          @options[:set][:soname] = soname
         end
 
         opts.on('--version', 'Show current gem\'s version.') {}

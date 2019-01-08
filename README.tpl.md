@@ -27,13 +27,17 @@ SHELL_OUTPUT_OF(patchelf.rb --print-interpreter --print-needed /bin/ls)
 
 ### Change the dynamic loader (interpreter)
 ```
-$ patchelf.rb --si /lib64/my-ld-linux-x86-64.so.2 program.elf output.elf
-```
-
-```
-SHELL_OUTPUT_OF(patchelf.rb --si /lib64/AAAA.so /bin/ls ls.patch)
+# $ patchelf.rb --interp NEW_INTERP input.elf output.elf
+SHELL_OUTPUT_OF(patchelf.rb --interp /lib/AAAA.so /bin/ls ls.patch)
 SHELL_OUTPUT_OF(file ls.patch)
 SHELL_EXEC(rm -f ls.patch)
+```
+
+### Change SONAME of a shared library
+```
+SHELL_OUTPUT_OF(patchelf.rb --so libc.so.217 /lib/x86_64-linux-gnu/libc.so.6 ./libc.patched)
+SHELL_OUTPUT_OF(readelf -d libc.patched | grep SONAME)
+SHELL_EXEC(rm -f libc.patched)
 ```
 
 ### As Ruby library

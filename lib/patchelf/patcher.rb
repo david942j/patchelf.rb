@@ -1,3 +1,5 @@
+# encoding: ascii-8bit
+
 require 'elftools'
 require 'fileutils'
 
@@ -68,40 +70,12 @@ module PatchELF
       @mm = PatchELF::MM.new(@elf)
       # Patching interpreter is the easiest.
       patch_interpreter(@set[:interpreter])
+      patch_dynamic
 
       @mm.dispatch!
 
       FileUtils.cp(@in_file, out_file) if out_file != @in_file
-      # if @mm.extend_size != 0:
-      # 1. Remember all data after the original second LOAD
-      # 2. Apply patches before the second LOAD.
-      # 3. Apply patches located after the second LOAD.
-
-      File.open(out_file, 'r+') do |f|
-        if @mm.extended?
-          original_head = @mm.threshold
-          extra = {}
-          # Copy all data after the second load
-          @elf.stream.pos = original_head
-          extra[original_head + @mm.extend_size] = @elf.stream.read # read to end
-          # zero out the 'gap' we created
-          extra[original_head] = "\x00" * @mm.extend_size
-          extra.each do |pos, str|
-            f.pos = pos
-            f.write(str)
-          end
-        end
-        @elf.patches.each do |pos, str|
-          f.pos = @mm.extended_offset(pos)
-          f.write(str)
-        end
-
-        @inline_patch.each do |pos, str|
-          f.pos = pos
-          f.write(str)
-        end
-      end
-
+      patch_out(out_file)
       # Let output file have the same permission as input.
       FileUtils.chmod(File.stat(@in_file).mode, out_file)
     end
@@ -199,6 +173,79 @@ module PatchELF
       end
     end
 
+    def patch_dynamic
+      # We never do inline patching on strtab's string.
+      # 1. Search if there's useful string exists
+      #   - only need header patching
+      # 2. Append a new string to the strtab.
+      #   - register strtab extension
+      return if @set[:soname].nil?
+
+      dynamic_or_log.tags # HACK, force @tags to be defined
+      # The tag must exist.
+      so_tag = dynamic_or_log.tag_by_type(:soname)
+      reg_str_table(@set[:soname]) do |idx|
+        so_tag.header.d_val = idx
+      end
+      malloc_strtab!
+    end
+
+    def malloc_strtab!
+      return unless defined?(@strtab_extend_requests)
+
+      strtab = dynamic_or_log.tag_by_type(:strtab)
+      # Process registered requests
+      need_size = strtab_string.size + @strtab_extend_requests.reduce(0) { |sum, (str, _)| sum + str.size + 1 }
+      dynstr = section_header('.dynstr')
+      @mm.malloc(need_size) do |off, vaddr|
+        new_str = strtab_string + @strtab_extend_requests.map(&:first).join("\x00") + "\x00"
+        inline_patch(off, new_str)
+        @strtab_extend_requests.each do |str, block|
+          # TODO: make here more efficient
+          block.call(new_str.index(str + "\x00"))
+        end
+        # Now patching strtab header
+        strtab.header.d_val = vaddr
+        # We also need to patch dynstr to let readelf have correct output.
+        if dynstr
+          dynstr.sh_size = new_str.size
+          dynstr.sh_offset = off
+          dynstr.sh_addr = vaddr
+        end
+      end
+    end
+
+    # @param [String]
+    # @yieldparam [Integer] idx
+    # @yieldreturn [void]
+    def reg_str_table(str, &block)
+      idx = strtab_string.index(str + "\x00")
+      # Request string is already exist
+      return yield idx if idx
+
+      # Record the request
+      @strtab_extend_requests ||= []
+      @strtab_extend_requests << [str, block]
+    end
+
+    def strtab_string
+      return @strtab_string if defined?(@strtab_string)
+
+      # TODO: handle no strtab exists..
+      offset = @elf.offset_from_vma(dynamic_or_log.tag_by_type(:strtab).value)
+      # This is a little tricky since no length information is stored in the tag.
+      # We first get the file offset of the string then 'guess' where the end is.
+      @elf.stream.pos = offset
+      @strtab_string = ''
+      loop do
+        c = @elf.stream.read(1)
+        break unless c =~ /\x00|[[:print:]]/
+
+        @strtab_string << c
+      end
+      @strtab_string
+    end
+
     # @return [Boolean]
     def dirty?
       @set.any?
@@ -233,6 +280,39 @@ module PatchELF
     # i.e. NEVER intend to change the string defined in strtab
     def inline_patch(off, str)
       @inline_patch[@mm.extended_offset(off)] = str
+    end
+
+    # Modify the out_file according to registered patches.
+    def patch_out(out_file)
+      # if @mm.extend_size != 0:
+      # 1. Remember all data after the original second LOAD
+      # 2. Apply patches before the second LOAD.
+      # 3. Apply patches located after the second LOAD.
+
+      File.open(out_file, 'r+') do |f|
+        if @mm.extended?
+          original_head = @mm.threshold
+          extra = {}
+          # Copy all data after the second load
+          @elf.stream.pos = original_head
+          extra[original_head + @mm.extend_size] = @elf.stream.read # read to end
+          # zero out the 'gap' we created
+          extra[original_head] = "\x00" * @mm.extend_size
+          extra.each do |pos, str|
+            f.pos = pos
+            f.write(str)
+          end
+        end
+        @elf.patches.each do |pos, str|
+          f.pos = @mm.extended_offset(pos)
+          f.write(str)
+        end
+
+        @inline_patch.each do |pos, str|
+          f.pos = pos
+          f.write(str)
+        end
+      end
     end
   end
 end
