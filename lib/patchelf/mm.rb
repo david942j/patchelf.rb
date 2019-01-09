@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'patchelf/helper'
 require 'patchelf/interval'
 

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module PatchELF
   # Helper methods for internal usage.
   module Helper

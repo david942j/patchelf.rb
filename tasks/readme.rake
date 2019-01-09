@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 desc 'Generate README.md from README.tpl.md'
 task :readme do
   next if ENV['CI']
@@ -29,7 +31,7 @@ task :readme do
     replace('SHELL_EXEC') do |cmd|
       `#{cmd}`
       # bad idea..
-      @cur = ''
+      @cur = +''
     end
 
     replace('DEFINE_PATCHER') do |str|

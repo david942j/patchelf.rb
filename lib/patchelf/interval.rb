@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module PatchELF
   # Provides easier-to-use methods for manipulating LOAD segment.
   #

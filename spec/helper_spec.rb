@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'patchelf/helper'
 
 describe PatchELF::Helper do

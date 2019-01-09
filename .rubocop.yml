@@ -1,8 +1,9 @@
 AllCops:
   DisplayCopNames: true
   DisplayStyleGuide: true
-  Exclude:
-    - lib/one_gadget/builds/*.rb
+
+Gemspec/RequiredRubyVersion:
+  Enabled: false
 
 Layout/EndOfLine:
   EnforcedStyle: lf
@@ -32,19 +33,7 @@ Metrics/MethodLength:
 Metrics/ModuleLength:
   Enabled: false
 
-Metrics/PerceivedComplexity:
-  Enabled: false
-
-Naming/FileName:
-  Enabled: false
-
 Naming/HeredocDelimiterNaming:
-  Enabled: false
-
-Naming/UncommunicativeMethodParamName:
-  Enabled: false
-
-Rails:
   Enabled: false
 
 Style/FormatStringToken:
@@ -53,8 +42,5 @@ Style/FormatStringToken:
 Style/MixinUsage:
   Enabled: false
 
-Style/PercentLiteralDelimiters:
-  Enabled: false
-
-Style/TrailingBodyOnMethodDefinition:
+Style/RedundantFreeze:
   Enabled: false

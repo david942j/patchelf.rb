@@ -1,4 +1,5 @@
 # encoding: ascii-8bit
+# frozen_string_literal: true
 
 require 'elftools/constants'
 require 'elftools/elf_file'
@@ -298,7 +299,7 @@ module PatchELF
       # This is a little tricky since no length information is stored in the tag.
       # We first get the file offset of the string then 'guess' where the end is.
       @elf.stream.pos = offset
-      @strtab_string = ''
+      @strtab_string = +''
       loop do
         c = @elf.stream.read(1)
         break unless c =~ /\x00|[[:print:]]/
