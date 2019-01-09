@@ -12,23 +12,28 @@ Implements features of NixOS/patchelf in pure Ruby.
 
 ## Installation
 
-WIP.
+Available on RubyGems.org!
+```
+$ gem install patchelf
+```
 
 ## Usage
 
 ```
 $ patchelf.rb
 # Usage: patchelf.rb <commands> FILENAME [OUTPUT_FILE]
-#         --pi, --print-interpreter    Show interpreter's name.
-#         --interp, --set-interpreter INTERP
+#         --print-interpreter, --pi    Show interpreter's name.
+#         --print-needed, --pn         Show needed libraries specified in DT_NEEDED.
+#         --print-soname, --ps         Show soname specified in DT_SONAME.
+#         --print-runpath, --pr        Show the path specified in DT_RUNPATH.
+#         --set-interpreter, --interp INTERP
 #                                      Set interpreter's name.
-#         --pn, --print-needed         Show needed libraries specified in DT_NEEDED.
-#         --ps, --print-soname         Show soname specified in DT_SONAME.
-#         --so, --set-soname SONAME    Set name of a shared library.
-#         --pr, --print-runpath        Show the path specified in DT_RUNPATH.
+#         --set-soname, --so SONAME    Set name of a shared library.
+#         --set-runpath, --runpath PATH
+#                                      Set the path of runpath.
 #         --force-rpath                According to the ld.so docs, DT_RPATH is obsolete,
 #                                      patchelf.rb will always try to get/set DT_RUNPATH first.
-#                                      Use this option to force every operations related to runpath (e.g. --pr, --runpath)
+#                                      Use this option to force every operations related to runpath (e.g. --runpath)
 #                                      to consider 'DT_RPATH' instead of 'DT_RUNPATH'.
 #         --version                    Show current gem's version.
 
@@ -54,10 +59,19 @@ $ file ls.patch
 
 ### Change SONAME of a shared library
 ```
-$ patchelf.rb --so libc.so.217 /lib/x86_64-linux-gnu/libc.so.6 ./libc.patched
+$ patchelf.rb --so libc.so.217 /lib/x86_64-linux-gnu/libc.so.6 ./libc.patch
 
-$ readelf -d libc.patched | grep SONAME
+$ readelf -d libc.patch | grep SONAME
 #  0x000000000000000e (SONAME)             Library soname: [libc.so.217]
+
+```
+
+### Set RUNPATH of an executable
+```
+$ patchelf.rb --runpath . /bin/ls ls.patch
+
+$ readelf -d ls.patch | grep RUNPATH
+#  0x000000000000001d (RUNPATH)            Library runpath: [.]
 
 ```
 

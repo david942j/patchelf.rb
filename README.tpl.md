@@ -12,7 +12,10 @@ Implements features of NixOS/patchelf in pure Ruby.
 
 ## Installation
 
-WIP.
+Available on RubyGems.org!
+```
+$ gem install patchelf
+```
 
 ## Usage
 
@@ -35,9 +38,16 @@ SHELL_EXEC(rm -f ls.patch)
 
 ### Change SONAME of a shared library
 ```
-SHELL_OUTPUT_OF(patchelf.rb --so libc.so.217 /lib/x86_64-linux-gnu/libc.so.6 ./libc.patched)
-SHELL_OUTPUT_OF(readelf -d libc.patched | grep SONAME)
-SHELL_EXEC(rm -f libc.patched)
+SHELL_OUTPUT_OF(patchelf.rb --so libc.so.217 /lib/x86_64-linux-gnu/libc.so.6 ./libc.patch)
+SHELL_OUTPUT_OF(readelf -d libc.patch | grep SONAME)
+SHELL_EXEC(rm -f libc.patch)
+```
+
+### Set RUNPATH of an executable
+```
+SHELL_OUTPUT_OF(patchelf.rb --runpath . /bin/ls ls.patch)
+SHELL_OUTPUT_OF(readelf -d ls.patch | grep RUNPATH)
+SHELL_EXEC(rm -f libc.patch)
 ```
 
 ### As Ruby library

@@ -58,4 +58,13 @@ soname: XDD
       EOS
     end
   end
+
+  it 'set runpath' do
+    with_tempfile do |tmp|
+      described_class.work(['--runpath', '/xdd', bin_path('runpath.elf'), tmp])
+      expect { hook_logger { described_class.work(['--pr', tmp]) } }.to output(<<-EOS).to_stdout
+runpath: /xdd
+      EOS
+    end
+  end
 end

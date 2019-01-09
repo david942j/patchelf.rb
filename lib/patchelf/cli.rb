@@ -64,35 +64,39 @@ module PatchELF
       @option_parser ||= OptionParser.new do |opts|
         opts.banner = USAGE
 
-        opts.on('--pi', '--print-interpreter', 'Show interpreter\'s name.') do
+        opts.on('--print-interpreter', '--pi', 'Show interpreter\'s name.') do
           @options[:print] << :interpreter
         end
 
-        opts.on('--interp INTERP', '--set-interpreter INTERP', 'Set interpreter\'s name.') do |interp|
-          @options[:set][:interpreter] = interp
-        end
-
-        opts.on('--pn', '--print-needed', 'Show needed libraries specified in DT_NEEDED.') do
+        opts.on('--print-needed', '--pn', 'Show needed libraries specified in DT_NEEDED.') do
           @options[:print] << :needed
         end
 
-        opts.on('--ps', '--print-soname', 'Show soname specified in DT_SONAME.') do
+        opts.on('--print-soname', '--ps', 'Show soname specified in DT_SONAME.') do
           @options[:print] << :soname
         end
 
-        opts.on('--so SONAME', '--set-soname SONAME', 'Set name of a shared library.') do |soname|
+        opts.on('--print-runpath', '--pr', 'Show the path specified in DT_RUNPATH.') do
+          @options[:print] << :runpath
+        end
+
+        opts.on('--set-interpreter INTERP', '--interp INTERP', 'Set interpreter\'s name.') do |interp|
+          @options[:set][:interpreter] = interp
+        end
+
+        opts.on('--set-soname SONAME', '--so SONAME', 'Set name of a shared library.') do |soname|
           @options[:set][:soname] = soname
         end
 
-        opts.on('--pr', '--print-runpath', 'Show the path specified in DT_RUNPATH.') do
-          @options[:print] << :runpath
+        opts.on('--set-runpath PATH', '--runpath PATH', 'Set the path of runpath.') do |path|
+          @options[:set][:runpath] = path
         end
 
         opts.on(
           '--force-rpath',
           'According to the ld.so docs, DT_RPATH is obsolete,',
           "#{SCRIPT_NAME} will always try to get/set DT_RUNPATH first.",
-          'Use this option to force every operations related to runpath (e.g. --pr, --runpath)',
+          'Use this option to force every operations related to runpath (e.g. --runpath)',
           'to consider \'DT_RPATH\' instead of \'DT_RUNPATH\'.'
         ) do
           @options[:force_rpath] = true

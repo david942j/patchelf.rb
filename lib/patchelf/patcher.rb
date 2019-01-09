@@ -1,6 +1,9 @@
 # encoding: ascii-8bit
 
-require 'elftools'
+require 'elftools/constants'
+require 'elftools/elf_file'
+require 'elftools/structs'
+require 'elftools/util'
 require 'fileutils'
 
 require 'patchelf/logger'
@@ -184,15 +187,59 @@ module PatchELF
       #   - only need header patching
       # 2. Append a new string to the strtab.
       #   - register strtab extension
-      return if @set[:soname].nil?
-
       dynamic_or_log.tags # HACK, force @tags to be defined
+      patch_soname if @set[:soname]
+      patch_runpath if @set[:runpath]
+      malloc_strtab!
+      expand_dynamic!
+    end
+
+    def patch_soname
       # The tag must exist.
       so_tag = dynamic_or_log.tag_by_type(:soname)
       reg_str_table(@set[:soname]) do |idx|
         so_tag.header.d_val = idx
       end
-      malloc_strtab!
+    end
+
+    def patch_runpath
+      tag = dynamic_or_log.tag_by_type(@rpath_sym)
+      tag = tag.nil? ? lazy_dyn(@rpath_sym) : tag.header
+      reg_str_table(@set[:runpath]) do |idx|
+        tag.d_val = idx
+      end
+    end
+
+    # Create a temp tag header.
+    # @return [ELFTools::Structs::ELF_Dyn]
+    def lazy_dyn(sym)
+      ELFTools::Structs::ELF_Dyn.new(endian: @elf.endian).tap do |dyn|
+        @append_dyn << dyn
+        dyn.elf_class = @elf.elf_class
+        dyn.d_tag = ELFTools::Util.to_constant(ELFTools::Constants::DT, sym)
+      end
+    end
+
+    def expand_dynamic!
+      return if @append_dyn.empty?
+
+      dyn_sec = section_header('.dynamic')
+      dynamic = dynamic_or_log
+      total = dynamic.tags.map(&:header)
+      # the last must be a null-tag
+      total = total[0..-2] + @append_dyn + [total.last]
+      bytes = total.first.num_bytes * total.size
+      @mm.malloc(bytes) do |off, vaddr|
+        inline_patch(off, total.map(&:to_binary_s).join)
+        dynamic.header.p_offset = off
+        dynamic.header.p_vaddr = dynamic.header.p_paddr = vaddr
+        dynamic.header.p_filesz = dynamic.header.p_memsz = bytes
+        if dyn_sec
+          dyn_sec.sh_offset = off
+          dyn_sec.sh_addr = vaddr
+          dyn_sec.sh_size = bytes
+        end
+      end
     end
 
     def malloc_strtab!
@@ -228,6 +275,7 @@ module PatchELF
       @elf = ELFTools::ELFFile.new(File.open(@in_file))
       @mm = PatchELF::MM.new(@elf)
       @strtab_extend_requests = []
+      @append_dyn = []
     end
 
     # @param [String] str
@@ -293,7 +341,7 @@ module PatchELF
     # or set strings in a malloc-ed area.
     # i.e. NEVER intend to change the string defined in strtab
     def inline_patch(off, str)
-      @inline_patch[@mm.extended_offset(off)] = str
+      @inline_patch[off] = str
     end
 
     # Modify the out_file according to registered patches.

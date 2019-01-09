@@ -101,4 +101,40 @@ describe PatchELF::Patcher do
       test_proc.call('.so'.rjust(0x1000, 'super-long'))
     end
   end
+
+  describe 'runpath=' do
+    it 'runpath exist' do
+      patcher = get_patcher('runpath.elf')
+      patcher.runpath = 'XD'
+      with_tempfile do |tmp|
+        patcher.save(tmp)
+        expect(described_class.new(tmp).get(:runpath)).to eq 'XD'
+      end
+    end
+
+    it 'runpath not exist' do
+      patcher = get_patcher('rpath.elf')
+      expect { hook_logger { patcher.get(:runpath) } }.to output(<<-EOS).to_stdout
+[WARN] Entry DT_RUNPATH not found.
+      EOS
+      patcher.runpath = 'XD'
+      with_tempfile do |tmp|
+        patcher.save(tmp)
+        expect(described_class.new(tmp).get(:runpath)).to eq 'XD'
+      end
+    end
+
+    it 'with use_rpath' do
+      patcher = get_patcher('rpath.elf').use_rpath!
+      expect(patcher.get(:runpath)).to eq '/not_exists:/lib:/pusheen/is/fat'
+      patcher.runpath = 'XD'
+      with_tempfile do |tmp|
+        patcher.save(tmp)
+        expect(described_class.new(tmp).use_rpath!.get(:runpath)).to eq 'XD'
+      end
+    end
+  end
+
+  describe 'needed=' do
+  end
 end
