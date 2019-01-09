@@ -4,8 +4,8 @@ require 'patchelf/interval'
 module PatchELF
   # Memory management, provides malloc/free to allocate LOAD segments.
   class MM
-    attr_reader :extend_size # @return [Integer]
-    attr_reader :threshold # @return [Integer]
+    attr_reader :extend_size # @return [Integer] The size extended.
+    attr_reader :threshold # @return [Integer] Where the file start to be extended.
 
     # Instantiate a {MM} object.
     # @param [ELFTools::ELFFile] elf
@@ -73,7 +73,11 @@ module PatchELF
       defined?(@threshold)
     end
 
+    # Get correct offset after the extension.
+    #
+    # @param [Integer] off
     # @return [Integer]
+    #   Shifted offset.
     def extended_offset(off)
       return off unless defined?(@threshold)
       return off if off < @threshold

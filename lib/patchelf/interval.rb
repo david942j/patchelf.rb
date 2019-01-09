@@ -8,6 +8,7 @@ module PatchELF
     attr_reader :head # @return [Integer] Head.
     attr_reader :size # @return [Integer] Length.
 
+    # Instantiate a {Interval} object.
     # @param [Integer] head
     # @param [Integer] size
     def initialize(head, size)
