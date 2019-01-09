@@ -8,9 +8,19 @@ describe PatchELF::CLI do
         described_class.work(%w[--pi --print-needed --print-soname] << bin_path('pie.elf'))
       end
     end.to output(<<-EOS).to_stdout
-Interpreter: /lib64/ld-linux-x86-64.so.2
-Needed: libstdc++.so.6 libc.so.6
+interpreter: /lib64/ld-linux-x86-64.so.2
+needed: libstdc++.so.6 libc.so.6
 [WARN] Entry DT_SONAME not found, not a shared library?
+    EOS
+  end
+
+  it 'force rpath' do
+    expect do
+      hook_logger do
+        described_class.work(%w[--pr --force-rpath] << bin_path('rpath.elf'))
+      end
+    end.to output(<<-EOS).to_stdout
+rpath: /not_exists:/lib:/pusheen/is/fat
     EOS
   end
 
@@ -30,7 +40,7 @@ PatchELF Version #{PatchELF::VERSION}
     with_tempfile do |tmp|
       described_class.work(['--interp', 'AAAAA', bin_path('pie.elf'), tmp])
       expect { hook_logger { described_class.work(['--pi', tmp]) } }.to output(<<-EOS).to_stdout
-Interpreter: AAAAA
+interpreter: AAAAA
       EOS
     end
   end
@@ -44,7 +54,7 @@ Interpreter: AAAAA
 
       described_class.work(['--so', 'XDD', bin_path('libtest.so'), tmp])
       expect { hook_logger { described_class.work(['--ps', tmp]) } }.to output(<<-EOS).to_stdout
-Soname: XDD
+soname: XDD
       EOS
     end
   end

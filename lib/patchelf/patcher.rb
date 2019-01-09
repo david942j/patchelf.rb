@@ -19,6 +19,7 @@ module PatchELF
       @in_file = filename
       @elf = ELFTools::ELFFile.new(File.open(filename))
       @set = {}
+      @rpath_sym = :runpath
     end
 
     # Set interpreter's name.
@@ -45,14 +46,21 @@ module PatchELF
       @set[:soname] = name
     end
 
-    # Set rpath.
+    # Set runpath.
     #
-    # If DT_RPATH is not presented in the input ELF,
-    # a new DT_RPATH attribute will be inserted into the DYNAMIC segment.
-    # @param [String] rpath
+    # If DT_RUNPATH is not presented in the input ELF,
+    # a new DT_RUNPATH attribute will be inserted into the DYNAMIC segment.
+    # @param [String] runpath
     # @macro note_apply
-    def rpath=(rpath)
-      @set[:rpath] = rpath
+    def runpath=(runpath)
+      @set[:runpath] = runpath
+    end
+
+    # Set all operations related to DT_RUNPATH to use DT_RPATH.
+    # @return [self]
+    def use_rpath!
+      @rpath_sym = :rpath
+      self
     end
 
     # Save the patched ELF as +out_file+.
@@ -60,15 +68,13 @@ module PatchELF
     #   If +out_file+ is +nil+, the original input file will be modified.
     # @return [void]
     def save(out_file = nil)
-      # TODO: Test if we can save twice, and the output files are exactly same.
       # If nothing is modified, return directly.
       return if out_file.nil? && !dirty?
 
       out_file ||= @in_file
-      # [{Integer => String}]
-      @inline_patch = {}
-      @mm = PatchELF::MM.new(@elf)
-      # Patching interpreter is the easiest.
+      # maybe we need a Saver class?
+      init_saver_variables
+
       patch_interpreter(@set[:interpreter])
       patch_dynamic
 
@@ -80,9 +86,9 @@ module PatchELF
       FileUtils.chmod(File.stat(@in_file).mode, out_file)
     end
 
-    # Get name(s) of interpreter, needed libraries, rpath, or soname.
+    # Get name(s) of interpreter, needed libraries, runpath, or soname.
     #
-    # @param [:interpreter, :needed, :rpath, :soname] name
+    # @param [:interpreter, :needed, :runpath, :soname] name
     # @return [String, Array<String>, nil]
     #   Returns name(s) fetched from ELF.
     # @example
@@ -99,7 +105,7 @@ module PatchELF
     #   Patcher.new('/lib/x86_64-linux-gnu/libc.so.6').get(:soname)
     #   #=> "libc.so.6"
     def get(name)
-      return unless %i[interpreter needed rpath soname].include?(name)
+      return unless %i[interpreter needed runpath soname].include?(name)
       return @set[name] if @set[name]
 
       __send__(name)
@@ -128,9 +134,8 @@ module PatchELF
     end
 
     # @return [String?]
-    def rpath
-      # TODO: consider both rpath and runpath
-      tag_name_or_log(:rpath, 'Entry DT_RPATH not found.')
+    def runpath
+      tag_name_or_log(@rpath_sym, "Entry DT_#{@rpath_sym.to_s.upcase} not found.")
     end
 
     # @return [String?]
@@ -191,7 +196,7 @@ module PatchELF
     end
 
     def malloc_strtab!
-      return unless defined?(@strtab_extend_requests)
+      return if @strtab_extend_requests.empty?
 
       strtab = dynamic_or_log.tag_by_type(:strtab)
       # Process registered requests
@@ -215,7 +220,17 @@ module PatchELF
       end
     end
 
-    # @param [String]
+    def init_saver_variables
+      # [{Integer => String}]
+      @inline_patch = {}
+      # We need a way to recover @elf..
+      @elf.stream.close
+      @elf = ELFTools::ELFFile.new(File.open(@in_file))
+      @mm = PatchELF::MM.new(@elf)
+      @strtab_extend_requests = []
+    end
+
+    # @param [String] str
     # @yieldparam [Integer] idx
     # @yieldreturn [void]
     def reg_str_table(str, &block)
@@ -224,7 +239,6 @@ module PatchELF
       return yield idx if idx
 
       # Record the request
-      @strtab_extend_requests ||= []
       @strtab_extend_requests << [str, block]
     end
 

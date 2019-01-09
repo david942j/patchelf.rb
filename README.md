@@ -20,11 +20,16 @@ WIP.
 $ patchelf.rb
 # Usage: patchelf.rb <commands> FILENAME [OUTPUT_FILE]
 #         --pi, --print-interpreter    Show interpreter's name.
-#         --pn, --print-needed         Show needed libraries specified in DT_NEEDED.
-#         --ps, --print-soname         Show soname specified in DT_SONAME.
 #         --interp, --set-interpreter INTERP
 #                                      Set interpreter's name.
+#         --pn, --print-needed         Show needed libraries specified in DT_NEEDED.
+#         --ps, --print-soname         Show soname specified in DT_SONAME.
 #         --so, --set-soname SONAME    Set name of a shared library.
+#         --pr, --print-runpath        Show the path specified in DT_RUNPATH.
+#         --force-rpath                According to the ld.so docs, DT_RPATH is obsolete,
+#                                      patchelf.rb will always try to get/set DT_RUNPATH first.
+#                                      Use this option to force every operations related to runpath (e.g. --pr, --runpath)
+#                                      to consider 'DT_RPATH' instead of 'DT_RUNPATH'.
 #         --version                    Show current gem's version.
 
 ```
@@ -32,8 +37,8 @@ $ patchelf.rb
 ### Display information
 ```
 $ patchelf.rb --print-interpreter --print-needed /bin/ls
-# Interpreter: /lib64/ld-linux-x86-64.so.2
-# Needed: libselinux.so.1 libc.so.6
+# interpreter: /lib64/ld-linux-x86-64.so.2
+# needed: libselinux.so.1 libc.so.6
 
 ```
 

@@ -32,12 +32,14 @@ module PatchELF
 
       # Now the options are (hopefully) valid, let's process the ELF file.
       patcher = PatchELF::Patcher.new(@options[:in_file])
+      patcher.use_rpath! if @options[:force_rpath]
       # TODO: Handle ELFTools::ELFError
       @options[:print].uniq.each do |s|
         content = patcher.get(s)
         next if content.nil?
 
-        $stdout.puts "#{s.to_s.capitalize}: #{Array(content).join(' ')}"
+        s = :rpath if @options[:force_rpath] && s == :runpath
+        $stdout.puts "#{s}: #{Array(content).join(' ')}"
       end
 
       @options[:set].each do |sym, val|
@@ -66,6 +68,10 @@ module PatchELF
           @options[:print] << :interpreter
         end
 
+        opts.on('--interp INTERP', '--set-interpreter INTERP', 'Set interpreter\'s name.') do |interp|
+          @options[:set][:interpreter] = interp
+        end
+
         opts.on('--pn', '--print-needed', 'Show needed libraries specified in DT_NEEDED.') do
           @options[:print] << :needed
         end
@@ -74,12 +80,22 @@ module PatchELF
           @options[:print] << :soname
         end
 
-        opts.on('--interp INTERP', '--set-interpreter INTERP', 'Set interpreter\'s name.') do |interp|
-          @options[:set][:interpreter] = interp
-        end
-
         opts.on('--so SONAME', '--set-soname SONAME', 'Set name of a shared library.') do |soname|
           @options[:set][:soname] = soname
+        end
+
+        opts.on('--pr', '--print-runpath', 'Show the path specified in DT_RUNPATH.') do
+          @options[:print] << :runpath
+        end
+
+        opts.on(
+          '--force-rpath',
+          'According to the ld.so docs, DT_RPATH is obsolete,',
+          "#{SCRIPT_NAME} will always try to get/set DT_RUNPATH first.",
+          'Use this option to force every operations related to runpath (e.g. --pr, --runpath)',
+          'to consider \'DT_RPATH\' instead of \'DT_RUNPATH\'.'
+        ) do
+          @options[:force_rpath] = true
         end
 
         opts.on('--version', 'Show current gem\'s version.') {}

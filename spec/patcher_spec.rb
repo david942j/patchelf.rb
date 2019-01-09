@@ -1,5 +1,6 @@
 # encoding: ascii-8bit
 
+require 'digest'
 require 'elftools'
 
 require 'patchelf/patcher'
@@ -15,9 +16,27 @@ describe PatchELF::Patcher do
     expect(patcher.get(:needed)).to eq %w[libstdc++.so.6 libc.so.6]
     expect { hook_logger { patcher.get(:interpreter) } }.to output("[WARN] No interpreter found.\n").to_stdout
 
-    expect(get_patcher('rpath.elf').get(:rpath)).to eq '/not_exists:/lib:/pusheen/is/fat'
+    expect { hook_logger { get_patcher('rpath.elf').get(:runpath) } }.to output(<<-EOS).to_stdout
+[WARN] Entry DT_RUNPATH not found.
+    EOS
+    expect(get_patcher('rpath.elf').use_rpath!.get(:runpath)).to eq '/not_exists:/lib:/pusheen/is/fat'
+    expect(get_patcher('runpath.elf').get(:runpath)).to eq '/not_exists:/lib:/pusheen/is/fat'
 
     expect(get_patcher('pie.elf').get(:interpreter)).to eq '/lib64/ld-linux-x86-64.so.2'
+  end
+
+  describe 'save' do
+    it 'twice' do
+      patcher = get_patcher('libtest.so')
+      patcher.soname = '.so'.rjust(0x1000, 'long')
+      with_tempfile do |f1|
+        with_tempfile do |f2|
+          patcher.save(f1)
+          patcher.save(f2)
+          expect(Digest::MD5.digest(IO.binread(f1))).to eq Digest::MD5.digest(IO.binread(f2))
+        end
+      end
+    end
   end
 
   describe 'interpreter=' do
