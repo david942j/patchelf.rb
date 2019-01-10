@@ -5,6 +5,7 @@ require 'patchelf/interval'
 
 module PatchELF
   # Memory management, provides malloc/free to allocate LOAD segments.
+  # @private
   class MM
     attr_reader :extend_size # @return [Integer] The size extended.
     attr_reader :threshold # @return [Integer] Where the file start to be extended.
@@ -23,7 +24,7 @@ module PatchELF
     # @yieldreturn [void]
     #   One can only do the following things in the block:
     #   1. Set ELF headers' attributes (with ELFTools)
-    #   2. Invoke {Patcher#inline_patch}
+    #   2. Invoke {Saver#inline_patch}
     def malloc(size, &block)
       # TODO: check size > 0
       @request << [size, block]
