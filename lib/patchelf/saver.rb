@@ -95,6 +95,7 @@ module PatchELF
       patch_soname if @set[:soname]
       patch_runpath if @set[:runpath]
       patch_runpath(:rpath) if @set[:rpath]
+      patch_needed if @set[:needed]
       malloc_strtab!
       expand_dynamic!
     end
@@ -112,6 +113,38 @@ module PatchELF
       tag = tag.nil? ? lazy_dyn(sym) : tag.header
       reg_str_table(@set[sym]) do |idx|
         tag.d_val = idx
+      end
+    end
+
+    # To mark a not-using tag
+    IGNORE = ELFTools::Constants::DT_LOOS
+    def patch_needed
+      original_needs = dynamic.tags_by_type(:needed)
+      @set[:needed].uniq!
+      # 3 sets:
+      # 1. in original and in needs - remain unchanged
+      # 2. in original but not in needs - remove
+      # 3. not in original and in needs - append
+      original_needs.each do |n|
+        next if @set[:needed].include?(n.name)
+
+        n.header.d_tag = IGNORE # temporarily mark
+      end
+
+      extra = @set[:needed] - original_needs.map(&:name)
+      original_needs.each do |n|
+        break if extra.empty?
+        next if n.header.d_tag != IGNORE
+
+        n.header.d_tag = ELFTools::Constants::DT_NEEDED
+        reg_str_table(extra.shift) { |idx| n.header.d_val = idx }
+      end
+      return if extra.empty?
+
+      # no spaces, need append
+      extra.each do |name|
+        tag = lazy_dyn(:needed)
+        reg_str_table(name) { |idx| tag.d_val = idx }
       end
     end
 

@@ -28,6 +28,8 @@ $ patchelf.rb
 #         --print-runpath, --pr        Show the path specified in DT_RUNPATH.
 #         --set-interpreter, --interp INTERP
 #                                      Set interpreter's name.
+#         --set-needed, --needed LIB1,LIB2,LIB3
+#                                      Set needed libraries, this will remove all existent needed libraries.
 #         --set-soname, --so SONAME    Set name of a shared library.
 #         --set-runpath, --runpath PATH
 #                                      Set the path of runpath.

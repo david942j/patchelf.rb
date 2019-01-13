@@ -86,6 +86,11 @@ module PatchELF
           @options[:set][:interpreter] = interp
         end
 
+        opts.on('--set-needed LIB1,LIB2,LIB3', '--needed LIB1,LIB2,LIB3', Array,
+                'Set needed libraries, this will remove all existent needed libraries.') do |needs|
+          @options[:set][:needed] = needs
+        end
+
         opts.on('--set-soname SONAME', '--so SONAME', 'Set name of a shared library.') do |soname|
           @options[:set][:soname] = soname
         end

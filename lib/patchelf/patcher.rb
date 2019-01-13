@@ -34,6 +34,13 @@ module PatchELF
       @set[:interpreter] = interp
     end
 
+    # Set needed libraries.
+    # @param [Array<String>] needs
+    # @macro note_apply
+    def needed=(needs)
+      @set[:needed] = needs
+    end
+
     # Set soname.
     #
     # If the input ELF is not a shared library with a soname,

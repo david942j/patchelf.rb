@@ -136,6 +136,6 @@ describe PatchELF::Patcher do
     end
   end
 
-  describe 'needed=' do
+  describe 'needed' do
   end
 end
