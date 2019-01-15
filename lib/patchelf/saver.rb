@@ -243,11 +243,6 @@ module PatchELF
 
     # Modify the out_file according to registered patches.
     def patch_out(out_file)
-      # if @mm.extend_size != 0:
-      # 1. Remember all data after the original second LOAD
-      # 2. Apply patches before the second LOAD.
-      # 3. Apply patches located after the second LOAD.
-
       File.open(out_file, 'r+') do |f|
         if @mm.extended?
           original_head = @mm.threshold

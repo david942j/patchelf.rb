@@ -28,9 +28,20 @@ describe PatchELF::Saver do
         expect(PatchELF::Patcher.new(tmp).get(:needed)).to eq %w[a.so libc.so.6 b.so]
       end
     end
+  end
 
-    it 'executable after patching' do
-      linux_only!
+  describe 'Mixed' do
+    it 'runpath and needed' do
+      %w[pie.elf nopie.elf].each do |f|
+        bin = bin_path(f)
+        with_tempfile do |tmp|
+          described_class.new(bin, tmp,
+                              needed: %w[libc.so.6 libstdc++.so.6 libtest.so],
+                              runpath: bin_path('')).save!
+          expect(`#{tmp} < /dev/null`).to eq "It works!\n"
+          expect($CHILD_STATUS.exitstatus).to eq 217
+        end
+      end
     end
   end
 end

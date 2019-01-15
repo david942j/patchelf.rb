@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require 'patchelf/helper'
-require 'patchelf/interval'
 
 module PatchELF
   # Memory management, provides malloc/free to allocate LOAD segments.
@@ -35,39 +34,23 @@ module PatchELF
     def dispatch!
       return if @request.empty?
 
-      request_size = @request.map(&:first).inject(0, :+)
+      @request_size = @request.map(&:first).inject(0, :+)
       # TODO: raise exception if no LOAD exists.
 
-      # We're going to expand the first LOAD segment.
-      # Sometimes there's a 'gap' between the first and the second LOAD segment,
-      # in this case we only need to expand the first LOAD segment and remain all other things unchanged.
-      if gap_useful?(request_size)
-        invoke_callbacks
-        grow_first_load(request_size)
-      elsif extendable?(request_size)
-        # After extended we should have large enough 'gap'.
+      # The malloc-ed area must be 'rw-' since the dynamic table will be modified during runtime.
+      # Find all LOADs and calculate their f-gaps and m-gaps.
+      # We prefer f-gap since it doesn't need move the whole binaries.
+      # 1. Find if any f-gap has enough size, and one of the LOAD next to it is 'rw-'.
+      #   - expand (forwardlly), only need to change the attribute of LOAD.
+      # 2. Do 1. again but consider m-gaps instead.
+      #   - expand (forwardlly), need to modify all section headers.
+      # 3. We have to create a new LOAD, now we need to expand the first LOAD for putting new segment header.
 
-        # |  1  | |  2  |
-        # |  1  |        |  2  |
-        #=>
-        # |  1      | |  2  |
-        # |  1      |    |  2  |
-        # This is really dangerous..
-        # We have to check all p_offset / sh_offset
-        # 1. Use ELFTools to patch all headers
-        # 2. Mark the extended size, inline_patch will behave different after this.
-        # 3. Invoke block.call, which might copy tables and (not-allow-to-patch) strings into the gap
+      # First of all we check if there's less than two LOAD.
+      abnormal_elf('No LOAD segment found, not an executable.') if load_segments.empty?
+      # TODO: Handle only one LOAD. (be careful of if memsz > filesz)
 
-        @threshold = load_segments[1].file_head
-        # 1.file_tail + request_size <= 2.file_head + 0x1000x
-        @extend_size = PatchELF::Helper.alignup(request_size - gap_between_load.size)
-        shift_attributes
-
-        invoke_callbacks
-        grow_first_load(request_size)
-        # else
-        # This can happen in 32bit
-      end
+      fgap_method || mgap_method || new_load_method
     end
 
     # Query if extended.
@@ -90,37 +73,74 @@ module PatchELF
 
     private
 
-    def gap_useful?(need_size)
-      # Two conditions:
-      # 1. gap is large enough
-      gap = gap_between_load
-      return false if gap.size < need_size
+    def fgap_method
+      idx = find_gap { |prv, nxt| nxt.file_head - prv.file_tail }
+      return false if idx.nil?
 
-      # XXX: Do we really need this..?
-      # If gap is enough but not all zeros, we will fail on extension..
-      # 2. gap is all zeroes.
-      # @elf.stream.pos = gap.head
-      # return false unless @elf.stream.read(gap.size).bytes.inject(0, :+).zero?
+      loads = load_segments
+      # prefer extend backwardly
+      return extend_backward(loads[idx - 1]) if writable?(loads[idx - 1])
 
+      extend_forward(loads[idx])
+    end
+
+    def extend_backward(seg, size = @request_size)
+      invoke_callbacks(seg, seg.file_tail)
+      seg.header.p_filesz += size
+      seg.header.p_memsz += size
       true
     end
 
-    # @return [PatchELF::Interval]
-    def gap_between_load
-      # We need this cache since the second LOAD might be changed
-      return @gap_between_load if defined?(@gap_between_load)
+    def extend_forward(seg, size = @request_size)
+      seg.header.p_offset -= size
+      seg.header.p_vaddr -= size
+      seg.header.p_filesz += size
+      seg.header.p_memsz += size
+      invoke_callbacks(seg, seg.file_head)
+      true
+    end
 
-      loads = load_segments.map do |seg|
-        PatchELF::Interval.new(seg.file_head, seg.size)
+    def mgap_method
+      # |  1  | |  2  |
+      # |  1  |        |  2  |
+      #=>
+      # |  1      | |  2  |
+      # |  1      |    |  2  |
+      idx = find_gap(check_sz: false) { |prv, nxt| PatchELF::Helper.aligndown(nxt.mem_head) - prv.mem_tail }
+      return false if idx.nil?
+
+      loads = load_segments
+      @threshold = loads[idx].file_head
+      @extend_size = PatchELF::Helper.alignup(@request_size)
+      shift_attributes
+      # prefer backward than forward
+      return extend_backward(loads[idx - 1]) if writable?(loads[idx - 1])
+
+      # note: loads[idx].file_head has been changed in shift_attributes
+      extend_forward(loads[idx], @extend_size)
+    end
+
+    def find_gap(check_sz: true)
+      loads = load_segments
+      loads.each_with_index do |l, i|
+        next if i.zero?
+        next unless writable?(l) || writable?(loads[i - 1])
+
+        sz = yield(loads[i - 1], l)
+        abnormal_elf('LOAD segments are not in order') if check_sz && sz.negative?
+        next unless sz >= @request_size
+
+        return i
       end
-      # TODO: raise if loads.min != loads.first
+      nil
+    end
 
-      loads.sort!
-      # Only one LOAD, the gap has infinity size!
-      size = if loads.size == 1 then Float::INFINITY
-             else loads[1].head - loads.first.tail
-             end
-      @gap_between_load = PatchELF::Interval.new(loads.first.tail, size)
+    def new_load_method
+      raise NotImplementedError
+    end
+
+    def writable?(seg)
+      seg.readable? && seg.writable?
     end
 
     # For all attributes >= threshold, += offset
@@ -151,28 +171,16 @@ module PatchELF
       @elf.segments_by_type(:load)
     end
 
-    def extendable?(request_size)
-      loads = load_segments
-      # We can assume loads.size >= 2 because
-      # 0: has raised an exception before
-      # 1: the gap must be used, nobody cares extendable size.
-      # Calcluate the max size of the first LOAD segment can be.
-      PatchELF::Helper.aligndown(loads[1].mem_head) - loads.first.mem_tail >= request_size
-    end
-
-    def invoke_callbacks
-      seg = load_segments.first
-      cur = gap_between_load.head
+    def invoke_callbacks(seg, start)
+      cur = start
       @request.each do |sz, block|
         block.call(cur, seg.offset_to_vma(cur))
         cur += sz
       end
     end
 
-    def grow_first_load(size)
-      seg = load_segments.first
-      seg.header.p_filesz += size
-      seg.header.p_memsz += size
+    def abnormal_elf(msg)
+      raise ArgumentError, msg
     end
   end
 end
