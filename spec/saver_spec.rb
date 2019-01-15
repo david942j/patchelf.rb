@@ -32,6 +32,8 @@ describe PatchELF::Saver do
 
   describe 'Mixed' do
     it 'runpath and needed' do
+      linux_only!
+
       %w[pie.elf nopie.elf].each do |f|
         bin = bin_path(f)
         with_tempfile do |tmp|

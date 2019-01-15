@@ -42,11 +42,11 @@ module PatchELF
     # @return [Integer]
     #   Aligned result.
     # @example
-    #   Helper.aligndown(0x1234)
+    #   aligndown(0x1234)
     #   #=> 4096
-    #   Helper.aligndown(0x33, 0x20)
+    #   aligndown(0x33, 0x20)
     #   #=> 32
-    #   Helper.aligndown(0x10, 0x8)
+    #   aligndown(0x10, 0x8)
     #   #=> 16
     def aligndown(val, align = PAGE_SIZE)
       val - (val & (align - 1))
@@ -57,11 +57,11 @@ module PatchELF
     # @return [Integer]
     #   Aligned result.
     # @example
-    #   Helper.alignup(0x1234)
+    #   alignup(0x1234)
     #   #=> 8192
-    #   Helper.alignup(0x33, 0x20)
+    #   alignup(0x33, 0x20)
     #   #=> 64
-    #   Helper.alignup(0x10, 0x8)
+    #   alignup(0x10, 0x8)
     #   #=> 16
     def alignup(val, align = PAGE_SIZE)
       (val & (align - 1)).zero? ? val : (aligndown(val, align) + align)

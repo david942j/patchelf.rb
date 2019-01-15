@@ -35,8 +35,6 @@ module PatchELF
       return if @request.empty?
 
       @request_size = @request.map(&:first).inject(0, :+)
-      # TODO: raise exception if no LOAD exists.
-
       # The malloc-ed area must be 'rw-' since the dynamic table will be modified during runtime.
       # Find all LOADs and calculate their f-gaps and m-gaps.
       # We prefer f-gap since it doesn't need move the whole binaries.
@@ -46,9 +44,9 @@ module PatchELF
       #   - expand (forwardlly), need to modify all section headers.
       # 3. We have to create a new LOAD, now we need to expand the first LOAD for putting new segment header.
 
-      # First of all we check if there's less than two LOAD.
+      # First of all we check if there're less than two LOADs.
       abnormal_elf('No LOAD segment found, not an executable.') if load_segments.empty?
-      # TODO: Handle only one LOAD. (be careful of if memsz > filesz)
+      # TODO: Handle only one LOAD. (be careful if memsz > filesz)
 
       fgap_method || mgap_method || new_load_method
     end
@@ -127,7 +125,7 @@ module PatchELF
         next unless writable?(l) || writable?(loads[i - 1])
 
         sz = yield(loads[i - 1], l)
-        abnormal_elf('LOAD segments are not in order') if check_sz && sz.negative?
+        abnormal_elf('LOAD segments are out of order.') if check_sz && sz.negative?
         next unless sz >= @request_size
 
         return i
@@ -150,7 +148,7 @@ module PatchELF
       #   all
       # Segments:
       #   all
-      # XXX: will be buggy if one day the number of segments might be changed.
+      # XXX: will be buggy if someday the number of segments can be changed.
 
       # Bottom-up
       @elf.each_sections do |sec|

@@ -90,7 +90,7 @@ module PatchELF
     # @return [String, Array<String>, nil]
     #   Returns name(s) fetched from ELF.
     # @example
-    #   patcher = Patcher.new('/bin/ls')
+    #   patcher = PatchELF::Patcher.new('/bin/ls')
     #   patcher.get(:interpreter)
     #   #=> "/lib64/ld-linux-x86-64.so.2"
     #   patcher.get(:needed)
@@ -100,7 +100,7 @@ module PatchELF
     #   # [WARN] Entry DT_SONAME not found, not a shared library?
     #   #=> nil
     # @example
-    #   Patcher.new('/lib/x86_64-linux-gnu/libc.so.6').get(:soname)
+    #   PatchELF::Patcher.new('/lib/x86_64-linux-gnu/libc.so.6').get(:soname)
     #   #=> "libc.so.6"
     def get(name)
       return unless %i[interpreter needed runpath soname].include?(name)
@@ -114,7 +114,7 @@ module PatchELF
     # @return [String?]
     #   Get interpreter's name.
     # @example
-    #   Patcher.new('/bin/ls').interpreter
+    #   PatchELF::Patcher.new('/bin/ls').interpreter
     #   #=> "/lib64/ld-linux-x86-64.so.2"
     def interpreter
       segment = @elf.segment_by_type(:interp)
