@@ -36,17 +36,43 @@ SHELL_OUTPUT_OF(file ls.patch)
 SHELL_EXEC(rm -f ls.patch)
 ```
 
-### Change SONAME of a shared library
+### Modify dependency libraries
+
+#### Add
 ```
-SHELL_OUTPUT_OF(patchelf.rb --so libc.so.217 /lib/x86_64-linux-gnu/libc.so.6 ./libc.patch)
-SHELL_OUTPUT_OF(readelf -d libc.patch | grep SONAME)
-SHELL_EXEC(rm -f libc.patch)
+$ patchelf.rb --add-needed libnew.so /bin/ls ls.patch
+```
+
+#### Remove
+```
+$ patchelf.rb --remove-needed libc.so.6 /bin/ls ls.patch
+```
+
+#### Replace
+```
+SHELL_OUTPUT_OF(patchelf.rb --replace-needed libc.so.6,libcnew.so.6 /bin/ls ls.patch)
+SHELL_OUTPUT_OF(readelf -d ls.patch | grep NEEDED)
+SHELL_EXEC(rm -f ls.patch)
+```
+
+#### Set directly
+```
+SHELL_OUTPUT_OF(patchelf.rb --needed a.so,b.so,c.so /bin/ls ls.patch)
+SHELL_OUTPUT_OF(readelf -d ls.patch | grep NEEDED)
+SHELL_EXEC(rm -f ls.patch)
 ```
 
 ### Set RUNPATH of an executable
 ```
 SHELL_OUTPUT_OF(patchelf.rb --runpath . /bin/ls ls.patch)
 SHELL_OUTPUT_OF(readelf -d ls.patch | grep RUNPATH)
+SHELL_EXEC(rm -f libc.patch)
+```
+
+### Change SONAME of a shared library
+```
+SHELL_OUTPUT_OF(patchelf.rb --so libc.so.217 /lib/x86_64-linux-gnu/libc.so.6 libc.patch)
+SHELL_OUTPUT_OF(readelf -d libc.patch | grep SONAME)
 SHELL_EXEC(rm -f libc.patch)
 ```
 

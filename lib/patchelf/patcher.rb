@@ -41,6 +41,21 @@ module PatchELF
       @set[:needed] = needs
     end
 
+    def add_needed(need)
+      @set[:needed] ||= needed
+      @set[:needed] << need
+    end
+
+    def remove_needed(need)
+      @set[:needed] ||= needed
+      @set[:needed].delete(need)
+    end
+
+    def replace_needed(src, tar)
+      @set[:needed] ||= needed
+      @set[:needed].map! { |v| v == src ? tar : v }
+    end
+
     # Set soname.
     #
     # If the input ELF is not a shared library with a soname,

@@ -47,27 +47,6 @@ describe PatchELF::Patcher do
       EOS
     end
 
-    it 'different patched length' do
-      test_proc = proc do |file, str, filename|
-        patcher = get_patcher(file)
-        patcher.interpreter = str
-        patcher.save(filename)
-        expect(described_class.new(filename).get(:interpreter)).to eq str
-        File.open(filename) do |f|
-          expect(ELFTools::ELFFile.new(f).section_by_name('.interp').data).to eq str + "\x00"
-        end
-      end
-
-      with_tempfile do |tmp|
-        # Both PIE and no-PIE should be tested
-        %w[pie.elf nopie.elf].each do |f|
-          test_proc.call(f, '~test~', tmp)
-          test_proc.call(f, 'A' * 30, tmp) # slightly larger than the original interp
-          test_proc.call(f, 'A' * 0x1000, tmp) # very large, need extend bin
-        end
-      end
-    end
-
     it 'still executable after patching' do
       linux_only!
 
@@ -86,20 +65,14 @@ describe PatchELF::Patcher do
   end
 
   describe 'soname=' do
-    it 'different length' do
-      test_proc = proc do |name|
-        with_tempfile do |tmp|
-          patcher = get_patcher('libtest.so')
-          patcher.soname = name
-          patcher.save(tmp)
-          expect(described_class.new(tmp).get(:soname)).to eq name
-        end
+    it 'normal' do
+      name = 'longlong.so.31337'
+      with_tempfile do |tmp|
+        patcher = get_patcher('libtest.so')
+        patcher.soname = name
+        patcher.save(tmp)
+        expect(described_class.new(tmp).get(:soname)).to eq name
       end
-
-      test_proc.call('so.217') # exists string
-      test_proc.call('short.so')
-      test_proc.call('.so'.rjust(0x10, 'long'))
-      test_proc.call('.so'.rjust(0x1000, 'super-long'))
     end
   end
 
@@ -137,5 +110,15 @@ describe PatchELF::Patcher do
   end
 
   describe 'needed' do
+    it 'combo' do
+      patcher = get_patcher('pie.elf')
+      expect(patcher.get(:needed)).to eq %w[libstdc++.so.6 libc.so.6]
+      patcher.add_needed('added1')
+      patcher.add_needed('added2')
+      patcher.remove_needed('libc.so.6')
+      patcher.replace_needed('libstdc++.so.6', 'replaced')
+      patcher.remove_needed('added1')
+      expect(patcher.get(:needed)).to eq %w[replaced added2]
+    end
   end
 end

@@ -24,19 +24,22 @@ $ patchelf.rb
 # Usage: patchelf.rb <commands> FILENAME [OUTPUT_FILE]
 #         --print-interpreter, --pi    Show interpreter's name.
 #         --print-needed, --pn         Show needed libraries specified in DT_NEEDED.
-#         --print-soname, --ps         Show soname specified in DT_SONAME.
 #         --print-runpath, --pr        Show the path specified in DT_RUNPATH.
+#         --print-soname, --ps         Show soname specified in DT_SONAME.
 #         --set-interpreter, --interp INTERP
 #                                      Set interpreter's name.
 #         --set-needed, --needed LIB1,LIB2,LIB3
 #                                      Set needed libraries, this will remove all existent needed libraries.
-#         --set-soname, --so SONAME    Set name of a shared library.
+#         --add-needed LIB             Append a new needed library.
+#         --remove-needed LIB          Remove a needed library.
+#         --replace-needed LIB1,LIB2   Replace needed library LIB1 as LIB2.
 #         --set-runpath, --runpath PATH
 #                                      Set the path of runpath.
 #         --force-rpath                According to the ld.so docs, DT_RPATH is obsolete,
 #                                      patchelf.rb will always try to get/set DT_RUNPATH first.
 #                                      Use this option to force every operations related to runpath (e.g. --runpath)
 #                                      to consider 'DT_RPATH' instead of 'DT_RUNPATH'.
+#         --set-soname, --so SONAME    Set name of a shared library.
 #         --version                    Show current gem's version.
 
 ```
@@ -59,12 +62,36 @@ $ file ls.patch
 
 ```
 
-### Change SONAME of a shared library
-```
-$ patchelf.rb --so libc.so.217 /lib/x86_64-linux-gnu/libc.so.6 ./libc.patch
+### Modify dependency libraries
 
-$ readelf -d libc.patch | grep SONAME
-#  0x000000000000000e (SONAME)             Library soname: [libc.so.217]
+#### Add
+```
+$ patchelf.rb --add-needed libnew.so /bin/ls ls.patch
+```
+
+#### Remove
+```
+$ patchelf.rb --remove-needed libc.so.6 /bin/ls ls.patch
+```
+
+#### Replace
+```
+$ patchelf.rb --replace-needed libc.so.6,libcnew.so.6 /bin/ls ls.patch
+
+$ readelf -d ls.patch | grep NEEDED
+#  0x0000000000000001 (NEEDED)             Shared library: [libselinux.so.1]
+#  0x0000000000000001 (NEEDED)             Shared library: [libcnew.so.6]
+
+```
+
+#### Set directly
+```
+$ patchelf.rb --needed a.so,b.so,c.so /bin/ls ls.patch
+
+$ readelf -d ls.patch | grep NEEDED
+#  0x0000000000000001 (NEEDED)             Shared library: [a.so]
+#  0x0000000000000001 (NEEDED)             Shared library: [b.so]
+#  0x0000000000000001 (NEEDED)             Shared library: [c.so]
 
 ```
 
@@ -74,6 +101,15 @@ $ patchelf.rb --runpath . /bin/ls ls.patch
 
 $ readelf -d ls.patch | grep RUNPATH
 #  0x000000000000001d (RUNPATH)            Library runpath: [.]
+
+```
+
+### Change SONAME of a shared library
+```
+$ patchelf.rb --so libc.so.217 /lib/x86_64-linux-gnu/libc.so.6 libc.patch
+
+$ readelf -d libc.patch | grep SONAME
+#  0x000000000000000e (SONAME)             Library soname: [libc.so.217]
 
 ```
 

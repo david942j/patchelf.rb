@@ -47,6 +47,19 @@ interpreter: AAAAA
     end
   end
 
+  it 'set needed' do
+    with_tempfile do |tmp|
+      described_class.work(['--needed', 'libc1,libc2,libc3',
+                            '--add-needed', 'add',
+                            '--remove-needed', 'libc1',
+                            '--replace-needed', 'libc2,replace',
+                            bin_path('pie.elf'), tmp])
+      expect { hook_logger { described_class.work(['--pn', tmp]) } }.to output(<<-EOS).to_stdout
+needed: replace libc3 add
+      EOS
+    end
+  end
+
   it 'set soname' do
     with_tempfile do |tmp|
       expect { hook_logger { described_class.work(['--so', 'A', bin_path('pie.elf'), tmp]) } }

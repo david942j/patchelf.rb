@@ -27,7 +27,8 @@ module PatchELF
     def work(argv)
       @options = {
         set: {},
-        print: []
+        print: [],
+        needed: []
       }
       return $stdout.puts "PatchELF Version #{PatchELF::VERSION}" if argv.include?('--version')
       return $stdout.puts option_parser unless parse(argv)
@@ -46,6 +47,10 @@ module PatchELF
 
       @options[:set].each do |sym, val|
         patcher.__send__("#{sym}=".to_sym, val)
+      end
+
+      @options[:needed].each do |type, val|
+        patcher.__send__("#{type}_needed".to_sym, *val)
       end
 
       patcher.save(@options[:out_file])
@@ -74,12 +79,12 @@ module PatchELF
           @options[:print] << :needed
         end
 
-        opts.on('--print-soname', '--ps', 'Show soname specified in DT_SONAME.') do
-          @options[:print] << :soname
-        end
-
         opts.on('--print-runpath', '--pr', 'Show the path specified in DT_RUNPATH.') do
           @options[:print] << :runpath
+        end
+
+        opts.on('--print-soname', '--ps', 'Show soname specified in DT_SONAME.') do
+          @options[:print] << :soname
         end
 
         opts.on('--set-interpreter INTERP', '--interp INTERP', 'Set interpreter\'s name.') do |interp|
@@ -91,8 +96,16 @@ module PatchELF
           @options[:set][:needed] = needs
         end
 
-        opts.on('--set-soname SONAME', '--so SONAME', 'Set name of a shared library.') do |soname|
-          @options[:set][:soname] = soname
+        opts.on('--add-needed LIB', 'Append a new needed library.') do |lib|
+          @options[:needed] << [:add, lib]
+        end
+
+        opts.on('--remove-needed LIB', 'Remove a needed library.') do |lib|
+          @options[:needed] << [:remove, lib]
+        end
+
+        opts.on('--replace-needed LIB1,LIB2', Array, 'Replace needed library LIB1 as LIB2.') do |libs|
+          @options[:needed] << [:replace, libs]
         end
 
         opts.on('--set-runpath PATH', '--runpath PATH', 'Set the path of runpath.') do |path|
@@ -107,6 +120,10 @@ module PatchELF
           'to consider \'DT_RPATH\' instead of \'DT_RUNPATH\'.'
         ) do
           @options[:force_rpath] = true
+        end
+
+        opts.on('--set-soname SONAME', '--so SONAME', 'Set name of a shared library.') do |soname|
+          @options[:set][:soname] = soname
         end
 
         opts.on('--version', 'Show current gem\'s version.') {}
