@@ -189,9 +189,10 @@ module PatchELF
       @mm.malloc(need_size) do |off, vaddr|
         new_str = strtab_string + @strtab_extend_requests.map(&:first).join("\x00") + "\x00"
         inline_patch(off, new_str)
+        cur = strtab_string.size
         @strtab_extend_requests.each do |str, block|
-          # TODO: make here more efficient
-          block.call(new_str.index(str + "\x00"))
+          block.call(cur)
+          cur += str.size + 1
         end
         # Now patching strtab header
         strtab.header.d_val = vaddr

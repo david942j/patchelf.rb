@@ -34,9 +34,24 @@ module PatchELF
       return $stdout.puts option_parser unless parse(argv)
 
       # Now the options are (hopefully) valid, let's process the ELF file.
-      patcher = PatchELF::Patcher.new(@options[:in_file])
+      begin
+        @patcher = PatchELF::Patcher.new(@options[:in_file])
+      rescue ELFTools::ELFError, Errno::ENOENT => e
+        return PatchELF::Logger.error(e.message)
+      end
       patcher.use_rpath! if @options[:force_rpath]
-      # TODO: Handle ELFTools::ELFError
+      readonly
+      patch_requests
+      patcher.save(@options[:out_file])
+    end
+
+    private
+
+    def patcher
+      @patcher
+    end
+
+    def readonly
       @options[:print].uniq.each do |s|
         content = patcher.__send__(s)
         next if content.nil?
@@ -44,7 +59,9 @@ module PatchELF
         s = :rpath if @options[:force_rpath] && s == :runpath
         $stdout.puts "#{s}: #{Array(content).join(' ')}"
       end
+    end
 
+    def patch_requests
       @options[:set].each do |sym, val|
         patcher.__send__("#{sym}=".to_sym, val)
       end
@@ -52,11 +69,7 @@ module PatchELF
       @options[:needed].each do |type, val|
         patcher.__send__("#{type}_needed".to_sym, *val)
       end
-
-      patcher.save(@options[:out_file])
     end
-
-    private
 
     def parse(argv)
       remain = option_parser.permute(argv)

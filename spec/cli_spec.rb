@@ -4,6 +4,12 @@ require 'patchelf/cli'
 require 'patchelf/version'
 
 describe PatchELF::CLI do
+  it 'invalid input' do
+    expect { hook_logger { described_class.work(%w[--pi file_not_exists]) } }.to output(<<-EOS).to_stdout
+[ERROR] No such file or directory @ rb_sysopen - file_not_exists
+    EOS
+  end
+
   it 'print' do
     expect do
       hook_logger do

@@ -62,6 +62,11 @@ describe PatchELF::MM do
       expect(loads[1].file_head).to be 0x668
       expect(called).to be 1
     end
+
+    it 'new_load_method' do
+      loads = [make_load(0, 0xa2c, 0, 0xa2c, 'rx'), make_load(0xeb0, 0x158, 0x1eb0, 0x15c, 'rw')]
+      expect { test_dispatch(0x2000, loads) }.to raise_error(NotImplementedError)
+    end
   end
 
   describe 'extend backwardly' do

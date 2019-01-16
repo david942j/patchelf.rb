@@ -25,7 +25,8 @@ module PatchELF
     #   1. Set ELF headers' attributes (with ELFTools)
     #   2. Invoke {Saver#inline_patch}
     def malloc(size, &block)
-      # TODO: check size > 0
+      raise ArgumentError, 'malloc\'s size most be positive.' if size <= 0
+
       @request << [size, block]
     end
 
@@ -133,6 +134,7 @@ module PatchELF
       nil
     end
 
+    # TODO
     def new_load_method
       raise NotImplementedError
     end
