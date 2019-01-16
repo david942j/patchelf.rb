@@ -38,7 +38,7 @@ module PatchELF
       patcher.use_rpath! if @options[:force_rpath]
       # TODO: Handle ELFTools::ELFError
       @options[:print].uniq.each do |s|
-        content = patcher.get(s)
+        content = patcher.__send__(s)
         next if content.nil?
 
         s = :rpath if @options[:force_rpath] && s == :runpath

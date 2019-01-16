@@ -81,9 +81,9 @@ SHELL_EXEC(rm -f libc.patch)
 require 'patchelf'
 
 DEFINE_PATCHER(/bin/ls)
-RUBY_OUTPUT_OF(patcher.get(:interpreter))
+RUBY_OUTPUT_OF(patcher.interpreter)
 RUBY_EVAL(patcher.interpreter = '/lib/AAAA.so.2')
-RUBY_OUTPUT_OF(patcher.get(:interpreter))
+RUBY_OUTPUT_OF(patcher.interpreter)
 RUBY_EVAL(patcher.save('ls.patch'))
 
 # SHELL_OUTPUT_OF(file ls.patch)

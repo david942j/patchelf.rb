@@ -118,11 +118,11 @@ $ readelf -d libc.patch | grep SONAME
 require 'patchelf'
 
 patcher = PatchELF::Patcher.new('/bin/ls')
-patcher.get(:interpreter)
+patcher.interpreter
 #=> "/lib64/ld-linux-x86-64.so.2"
 
 patcher.interpreter = '/lib/AAAA.so.2'
-patcher.get(:interpreter)
+patcher.interpreter
 #=> "/lib/AAAA.so.2"
 
 patcher.save('ls.patch')

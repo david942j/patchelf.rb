@@ -13,17 +13,17 @@ describe PatchELF::Patcher do
 
   it 'get' do
     patcher = get_patcher('libtest.so')
-    expect(patcher.get(:soname)).to eq 'libtest.so.217'
-    expect(patcher.get(:needed)).to eq %w[libstdc++.so.6 libc.so.6]
-    expect { hook_logger { patcher.get(:interpreter) } }.to output("[WARN] No interpreter found.\n").to_stdout
+    expect(patcher.soname).to eq 'libtest.so.217'
+    expect(patcher.needed).to eq %w[libstdc++.so.6 libc.so.6]
+    expect { hook_logger { patcher.interpreter } }.to output("[WARN] No interpreter found.\n").to_stdout
 
-    expect { hook_logger { get_patcher('rpath.elf').get(:runpath) } }.to output(<<-EOS).to_stdout
+    expect { hook_logger { get_patcher('rpath.elf').runpath } }.to output(<<-EOS).to_stdout
 [WARN] Entry DT_RUNPATH not found.
     EOS
-    expect(get_patcher('rpath.elf').use_rpath!.get(:runpath)).to eq '/not_exists:/lib:/pusheen/is/fat'
-    expect(get_patcher('runpath.elf').get(:runpath)).to eq '/not_exists:/lib:/pusheen/is/fat'
+    expect(get_patcher('rpath.elf').use_rpath!.runpath).to eq '/not_exists:/lib:/pusheen/is/fat'
+    expect(get_patcher('runpath.elf').runpath).to eq '/not_exists:/lib:/pusheen/is/fat'
 
-    expect(get_patcher('pie.elf').get(:interpreter)).to eq '/lib64/ld-linux-x86-64.so.2'
+    expect(get_patcher('pie.elf').interpreter).to eq '/lib64/ld-linux-x86-64.so.2'
   end
 
   describe 'save' do
@@ -53,7 +53,7 @@ describe PatchELF::Patcher do
       %w[pie.elf nopie.elf].each do |f|
         [0x100, 0xfff].each do |pad_len|
           patcher = get_patcher(f)
-          patcher.interpreter = (patcher.get(:interpreter) + "\x00").ljust(pad_len, 'A')
+          patcher.interpreter = (patcher.interpreter + "\x00").ljust(pad_len, 'A')
           with_tempfile do |tmp|
             patcher.save(tmp)
             expect(`#{tmp} < /dev/null`).to eq "It works!\n"
@@ -71,7 +71,7 @@ describe PatchELF::Patcher do
         patcher = get_patcher('libtest.so')
         patcher.soname = name
         patcher.save(tmp)
-        expect(described_class.new(tmp).get(:soname)).to eq name
+        expect(described_class.new(tmp).soname).to eq name
       end
     end
   end
@@ -82,29 +82,29 @@ describe PatchELF::Patcher do
       patcher.runpath = 'XD'
       with_tempfile do |tmp|
         patcher.save(tmp)
-        expect(described_class.new(tmp).get(:runpath)).to eq 'XD'
+        expect(described_class.new(tmp).runpath).to eq 'XD'
       end
     end
 
     it 'runpath not exist' do
       patcher = get_patcher('rpath.elf')
-      expect { hook_logger { patcher.get(:runpath) } }.to output(<<-EOS).to_stdout
+      expect { hook_logger { patcher.runpath } }.to output(<<-EOS).to_stdout
 [WARN] Entry DT_RUNPATH not found.
       EOS
       patcher.runpath = 'XD'
       with_tempfile do |tmp|
         patcher.save(tmp)
-        expect(described_class.new(tmp).get(:runpath)).to eq 'XD'
+        expect(described_class.new(tmp).runpath).to eq 'XD'
       end
     end
 
     it 'with use_rpath' do
       patcher = get_patcher('rpath.elf').use_rpath!
-      expect(patcher.get(:runpath)).to eq '/not_exists:/lib:/pusheen/is/fat'
+      expect(patcher.runpath).to eq '/not_exists:/lib:/pusheen/is/fat'
       patcher.runpath = 'XD'
       with_tempfile do |tmp|
         patcher.save(tmp)
-        expect(described_class.new(tmp).use_rpath!.get(:runpath)).to eq 'XD'
+        expect(described_class.new(tmp).use_rpath!.runpath).to eq 'XD'
       end
     end
   end
@@ -112,13 +112,13 @@ describe PatchELF::Patcher do
   describe 'needed' do
     it 'combo' do
       patcher = get_patcher('pie.elf')
-      expect(patcher.get(:needed)).to eq %w[libstdc++.so.6 libc.so.6]
+      expect(patcher.needed).to eq %w[libstdc++.so.6 libc.so.6]
       patcher.add_needed('added1')
       patcher.add_needed('added2')
       patcher.remove_needed('libc.so.6')
       patcher.replace_needed('libstdc++.so.6', 'replaced')
       patcher.remove_needed('added1')
-      expect(patcher.get(:needed)).to eq %w[replaced added2]
+      expect(patcher.needed).to eq %w[replaced added2]
     end
   end
 end

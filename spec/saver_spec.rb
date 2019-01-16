@@ -8,7 +8,7 @@ describe PatchELF::Saver do
     it 'different length' do
       test_proc = proc do |file, str, filename|
         described_class.new(bin_path(file), filename, interpreter: str).save!
-        expect(PatchELF::Patcher.new(filename).get(:interpreter)).to eq str
+        expect(PatchELF::Patcher.new(filename).interpreter).to eq str
         File.open(filename) do |f|
           expect(ELFTools::ELFFile.new(f).section_by_name('.interp').data).to eq str + "\x00"
         end
@@ -30,7 +30,7 @@ describe PatchELF::Saver do
       test_proc = proc do |name|
         with_tempfile do |tmp|
           described_class.new(bin_path('libtest.so'), tmp, soname: name).save!
-          expect(PatchELF::Patcher.new(tmp).get(:soname)).to eq name
+          expect(PatchELF::Patcher.new(tmp).soname).to eq name
         end
       end
 
@@ -46,7 +46,7 @@ describe PatchELF::Saver do
       bin = bin_path('pie.elf')
       with_tempfile do |tmp|
         described_class.new(bin, tmp, needed: %w[a.so b.so]).save!
-        expect(PatchELF::Patcher.new(tmp).get(:needed)).to eq %w[a.so b.so]
+        expect(PatchELF::Patcher.new(tmp).needed).to eq %w[a.so b.so]
       end
     end
 
@@ -54,7 +54,7 @@ describe PatchELF::Saver do
       bin = bin_path('pie.elf')
       with_tempfile do |tmp|
         described_class.new(bin, tmp, needed: %w[libc.so.6]).save!
-        expect(PatchELF::Patcher.new(tmp).get(:needed)).to eq %w[libc.so.6]
+        expect(PatchELF::Patcher.new(tmp).needed).to eq %w[libc.so.6]
       end
     end
 
@@ -62,7 +62,7 @@ describe PatchELF::Saver do
       bin = bin_path('pie.elf')
       with_tempfile do |tmp|
         described_class.new(bin, tmp, needed: %w[libc.so.6 a.so b.so]).save!
-        expect(PatchELF::Patcher.new(tmp).get(:needed)).to eq %w[a.so libc.so.6 b.so]
+        expect(PatchELF::Patcher.new(tmp).needed).to eq %w[a.so libc.so.6 b.so]
       end
     end
   end

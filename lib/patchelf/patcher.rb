@@ -22,6 +22,15 @@ module PatchELF
       @rpath_sym = :runpath
     end
 
+    # @return [String?]
+    #   Get interpreter's name.
+    # @example
+    #   PatchELF::Patcher.new('/bin/ls').interpreter
+    #   #=> "/lib64/ld-linux-x86-64.so.2"
+    def interpreter
+      @set[:interpreter] || interpreter_
+    end
+
     # Set interpreter's name.
     #
     # If the input ELF has no existent interpreter,
@@ -29,9 +38,19 @@ module PatchELF
     # @param [String] interp
     # @macro note_apply
     def interpreter=(interp)
-      return if interpreter.nil? # will also show warning if there's no interp segment.
+      return if interpreter_.nil? # will also show warning if there's no interp segment.
 
       @set[:interpreter] = interp
+    end
+
+    # Get needed libraries.
+    # @return [Array<String>]
+    # @example
+    #   patcher = PatchELF::Patcher.new('/bin/ls')
+    #   patcher.needed
+    #   #=> ["libselinux.so.1", "libc.so.6"]
+    def needed
+      @set[:needed] || needed_
     end
 
     # Set needed libraries.
@@ -41,19 +60,49 @@ module PatchELF
       @set[:needed] = needs
     end
 
+    # Add the needed library.
+    # @param [String] need
+    # @return [void]
+    # @macro note_apply
     def add_needed(need)
-      @set[:needed] ||= needed
+      @set[:needed] ||= needed_
       @set[:needed] << need
     end
 
+    # Remove the needed library.
+    # @param [String] need
+    # @return [void]
+    # @macro note_apply
     def remove_needed(need)
-      @set[:needed] ||= needed
+      @set[:needed] ||= needed_
       @set[:needed].delete(need)
     end
 
+    # Replace needed library +src+ with +tar+.
+    #
+    # @param [String] src
+    #   Library to be replaced.
+    # @param [String] tar
+    #   Library replace with.
+    # @return [void]
+    # @macro note_apply
     def replace_needed(src, tar)
-      @set[:needed] ||= needed
+      @set[:needed] ||= needed_
       @set[:needed].map! { |v| v == src ? tar : v }
+    end
+
+    # Get the soname of a shared library.
+    # @return [String?] The name.
+    # @example
+    #   patcher = PatchELF::Patcher.new('/bin/ls')
+    #   patcher.soname
+    #   # [WARN] Entry DT_SONAME not found, not a shared library?
+    #   #=> nil
+    # @example
+    #   PatchELF::Patcher.new('/lib/x86_64-linux-gnu/libc.so.6').soname
+    #   #=> "libc.so.6"
+    def soname
+      @set[:soname] || soname_
     end
 
     # Set soname.
@@ -63,9 +112,15 @@ module PatchELF
     # @param [String] name
     # @macro note_apply
     def soname=(name)
-      return if soname.nil?
+      return if soname_.nil?
 
       @set[:soname] = name
+    end
+
+    # Get runpath.
+    # @return [String?]
+    def runpath
+      @set[@rpath_sym] || runpath_
     end
 
     # Set runpath.
@@ -99,39 +154,9 @@ module PatchELF
       saver.save!
     end
 
-    # Get name(s) of interpreter, needed libraries, runpath, or soname.
-    #
-    # @param [:interpreter, :needed, :runpath, :soname] name
-    # @return [String, Array<String>, nil]
-    #   Returns name(s) fetched from ELF.
-    # @example
-    #   patcher = PatchELF::Patcher.new('/bin/ls')
-    #   patcher.get(:interpreter)
-    #   #=> "/lib64/ld-linux-x86-64.so.2"
-    #   patcher.get(:needed)
-    #   #=> ["libselinux.so.1", "libc.so.6"]
-    #
-    #   patcher.get(:soname)
-    #   # [WARN] Entry DT_SONAME not found, not a shared library?
-    #   #=> nil
-    # @example
-    #   PatchELF::Patcher.new('/lib/x86_64-linux-gnu/libc.so.6').get(:soname)
-    #   #=> "libc.so.6"
-    def get(name)
-      return unless %i[interpreter needed runpath soname].include?(name)
-      return @set[name] if @set[name]
-
-      __send__(name)
-    end
-
     private
 
-    # @return [String?]
-    #   Get interpreter's name.
-    # @example
-    #   PatchELF::Patcher.new('/bin/ls').interpreter
-    #   #=> "/lib64/ld-linux-x86-64.so.2"
-    def interpreter
+    def interpreter_
       segment = @elf.segment_by_type(:interp)
       return PatchELF::Logger.warn('No interpreter found.') if segment.nil?
 
@@ -139,7 +164,7 @@ module PatchELF
     end
 
     # @return [Array<String>]
-    def needed
+    def needed_
       segment = dynamic_or_log
       return if segment.nil?
 
@@ -147,12 +172,12 @@ module PatchELF
     end
 
     # @return [String?]
-    def runpath
+    def runpath_
       tag_name_or_log(@rpath_sym, "Entry DT_#{@rpath_sym.to_s.upcase} not found.")
     end
 
     # @return [String?]
-    def soname
+    def soname_
       tag_name_or_log(:soname, 'Entry DT_SONAME not found, not a shared library?')
     end
 
