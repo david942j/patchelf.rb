@@ -92,4 +92,4 @@ SHELL_EXEC(rm ls.patch)
 
 ## Environment
 
-patchelf.rb is implemented in pure Ruby, so it should work in all environments include Linux, maxOS, and Windows!
+patchelf.rb is implemented in pure Ruby, so it should work in all environments include Linux, macOS, and Windows!
