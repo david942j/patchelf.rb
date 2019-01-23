@@ -50,7 +50,7 @@ GEM
     simplecov-html (0.10.2)
     tty-platform (0.2.0)
     unicode-display_width (1.4.1)
-    yard (0.9.16)
+    yard (0.9.18)
 
 PLATFORMS
   ruby
