@@ -2,3 +2,5 @@
 /doc/
 /coverage/
 /.yardoc/
+
+Gemfile.lock
