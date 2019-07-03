@@ -23,14 +23,14 @@ libraries.
   s.homepage      = 'https://github.com/david942j/patchelf.rb'
   s.executables   = ['patchelf.rb']
 
-  s.required_ruby_version = '>= 2.1.0'
+  s.required_ruby_version = '>= 2.3'
 
   s.add_runtime_dependency 'elftools', '~> 1.1'
 
   s.add_development_dependency 'rake', '~> 12.3'
   s.add_development_dependency 'rspec', '~> 3.8'
   s.add_development_dependency 'rubocop', '~> 0.62'
-  s.add_development_dependency 'simplecov', '~> 0.16.1'
+  s.add_development_dependency 'simplecov', '~> 0.17'
   s.add_development_dependency 'tty-platform', '~> 0.1'
   s.add_development_dependency 'yard', '~> 0.9'
 end

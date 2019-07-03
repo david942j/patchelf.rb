@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'elftools/segments/load_segment'
 require 'elftools/structs'
 
