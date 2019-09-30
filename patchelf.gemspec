@@ -27,7 +27,7 @@ libraries.
 
   s.add_runtime_dependency 'elftools', '~> 1.1'
 
-  s.add_development_dependency 'rake', '~> 12.3'
+  s.add_development_dependency 'rake', '~> 13.0'
   s.add_development_dependency 'rspec', '~> 3.8'
   s.add_development_dependency 'rubocop', '~> 0.62'
   s.add_development_dependency 'simplecov', '~> 0.17'
