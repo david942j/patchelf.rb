@@ -3,6 +3,7 @@
 
 require 'elftools/elf_file'
 
+require 'patchelf/exceptions'
 require 'patchelf/logger'
 require 'patchelf/saver'
 
@@ -15,11 +16,22 @@ module PatchELF
     # Instantiate a {Patcher} object.
     # @param [String] filename
     #   Filename of input ELF.
-    def initialize(filename)
+    # @param [Boolean] logging
+    #   Whether to use a (stderr-initialized) logger for errors
+    def initialize(filename, logging: true)
       @in_file = filename
       @elf = ELFTools::ELFFile.new(File.open(filename))
       @set = {}
       @rpath_sym = :runpath
+      @logging = logging
+    end
+
+    def log_or_raise(msg)
+      if @logging
+        PatchELF::Logger.warn(msg)
+      else
+        raise PatchELF::PatchError, msg
+      end
     end
 
     # @return [String?]
@@ -158,7 +170,7 @@ module PatchELF
 
     def interpreter_
       segment = @elf.segment_by_type(:interp)
-      return PatchELF::Logger.warn('No interpreter found.') if segment.nil?
+      return log_or_raise 'No interpreter found.' if segment.nil?
 
       segment.interp_name
     end
@@ -191,14 +203,14 @@ module PatchELF
       return if segment.nil?
 
       tag = segment.tag_by_type(type)
-      return PatchELF::Logger.warn(log_msg) if tag.nil?
+      return log_or_raise log_msg if tag.nil?
 
       tag.name
     end
 
     def dynamic_or_log
       @elf.segment_by_type(:dynamic).tap do |s|
-        PatchELF::Logger.warn('DYNAMIC segment not found, might be a statically-linked ELF?') if s.nil?
+        log_or_raise 'DYNAMIC segment not found, might be a statically-linked ELF?' if s.nil?
       end
     end
   end
