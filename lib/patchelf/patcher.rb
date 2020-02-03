@@ -26,14 +26,6 @@ module PatchELF
       @logging = logging
     end
 
-    def log_or_raise(msg)
-      if @logging
-        PatchELF::Logger.warn(msg)
-      else
-        raise PatchELF::PatchError, msg
-      end
-    end
-
     # @return [String?]
     #   Get interpreter's name.
     # @example
@@ -167,6 +159,14 @@ module PatchELF
     end
 
     private
+
+    def log_or_raise(msg)
+      if @logging
+        PatchELF::Logger.warn(msg)
+      else
+        raise PatchELF::PatchError, msg
+      end
+    end
 
     def interpreter_
       segment = @elf.segment_by_type(:interp)
