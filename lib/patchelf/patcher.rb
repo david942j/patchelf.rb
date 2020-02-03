@@ -161,11 +161,9 @@ module PatchELF
     private
 
     def log_or_raise(msg)
-      if @logging
-        PatchELF::Logger.warn(msg)
-      else
-        raise PatchELF::PatchError, msg
-      end
+      raise PatchELF::PatchError, msg unless @logging
+
+      PatchELF::Logger.warn(msg)
     end
 
     def interpreter_

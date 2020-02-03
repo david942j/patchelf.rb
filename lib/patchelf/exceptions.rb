@@ -5,5 +5,5 @@ require 'elftools/exceptions'
 
 module PatchELF
   # Raised on an error during ELF modification.
-  class PatchError < ELFTools::ELFError ; end
+  class PatchError < ELFTools::ELFError; end
 end

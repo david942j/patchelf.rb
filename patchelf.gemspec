@@ -19,7 +19,7 @@ libraries.
   s.license       = 'MIT'
   s.authors       = ['david942j']
   s.email         = ['david942j@gmail.com']
-  s.files         = Dir['lib/**/*.rb'] + Dir['bin/*'] + %w(README.md)
+  s.files         = Dir['lib/**/*.rb'] + Dir['bin/*'] + %w[README.md]
   s.homepage      = 'https://github.com/david942j/patchelf.rb'
   s.executables   = ['patchelf.rb']
 
