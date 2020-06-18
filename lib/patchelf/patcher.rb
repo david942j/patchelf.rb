@@ -13,6 +13,8 @@ module PatchELF
     # @!macro [new] note_apply
     #   @note This setting will be saved after {#save} being invoked.
 
+    attr_reader :elf # @return [ELFTools::ELFFile] ELF parser object.
+
     # Instantiate a {Patcher} object.
     # @param [String] filename
     #   Filename of input ELF.
