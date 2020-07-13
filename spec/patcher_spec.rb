@@ -7,8 +7,8 @@ require 'elftools'
 require 'patchelf/patcher'
 
 describe PatchELF::Patcher do
-  def get_patcher(filename)
-    described_class.new(bin_path(filename))
+  def get_patcher(filename, logging: true)
+    described_class.new(bin_path(filename), logging: logging)
   end
 
   it 'get' do
@@ -45,6 +45,9 @@ describe PatchELF::Patcher do
       expect { hook_logger { get_patcher('libtest.so').interpreter = 'a' } }.to output(<<-EOS).to_stdout
 [WARN] No interpreter found.
       EOS
+
+      patcher = get_patcher('libtest.so', logging: false)
+      expect { patcher.interpreter = 'a' }.to raise_error PatchELF::MissingSegmentError
     end
 
     it 'still executable after patching' do
@@ -142,6 +145,24 @@ describe PatchELF::Patcher do
       patcher.replace_needed('libstdc++.so.6', 'replaced')
       patcher.remove_needed('added1')
       expect(patcher.needed).to eq %w[replaced added2]
+    end
+  end
+
+  describe 'raises exception' do
+    it 'missing segment' do
+      expect { get_patcher('libtest.so', logging: false).interpreter }.to raise_error(PatchELF::MissingSegmentError)
+      expect { get_patcher('static.elf', logging: false).needed }.to raise_error(PatchELF::MissingSegmentError)
+    end
+
+    it 'raises missing segment when queried for DT_tag' do
+      patcher = get_patcher('static.elf', logging: false)
+      expect { patcher.runpath }.to raise_error(PatchELF::MissingSegmentError)
+      expect { patcher.soname }.to raise_error(PatchELF::MissingSegmentError)
+    end
+
+    it 'missing dynamic tag' do
+      expect { get_patcher('rpath.elf', logging: false).runpath }.to raise_error(PatchELF::MissingTagError)
+      expect { get_patcher('rpath.elf', logging: false).soname }.to raise_error(PatchELF::MissingTagError)
     end
   end
 end

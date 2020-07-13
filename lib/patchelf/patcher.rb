@@ -178,15 +178,15 @@ module PatchELF
 
     private
 
-    def log_or_raise(msg)
-      raise PatchELF::PatchError, msg unless @logging
+    def log_or_raise(msg, exception = PatchELF::PatchError)
+      raise exception, msg unless @logging
 
       PatchELF::Logger.warn(msg)
     end
 
     def interpreter_
       segment = @elf.segment_by_type(:interp)
-      return log_or_raise 'No interpreter found.' if segment.nil?
+      return log_or_raise 'No interpreter found.', PatchELF::MissingSegmentError if segment.nil?
 
       segment.interp_name
     end
@@ -219,14 +219,16 @@ module PatchELF
       return if segment.nil?
 
       tag = segment.tag_by_type(type)
-      return log_or_raise log_msg if tag.nil?
+      return log_or_raise log_msg, PatchELF::MissingTagError if tag.nil?
 
       tag.name
     end
 
     def dynamic_or_log
       @elf.segment_by_type(:dynamic).tap do |s|
-        log_or_raise 'DYNAMIC segment not found, might be a statically-linked ELF?' if s.nil?
+        if s.nil?
+          log_or_raise 'DYNAMIC segment not found, might be a statically-linked ELF?', PatchELF::MissingSegmentError
+        end
       end
     end
   end
