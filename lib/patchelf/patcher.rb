@@ -126,7 +126,23 @@ module PatchELF
     # Get runpath.
     # @return [String?]
     def runpath
-      @set[@rpath_sym] || runpath_
+      @set[@rpath_sym] || runpath_(@rpath_sym)
+    end
+
+    # Get rpath
+    # return [String?]
+    def rpath
+      @set[:rpath] || runpath_(:rpath)
+    end
+
+    # Set rpath
+    #
+    # Modify / set DT_RPATH of the given ELF.
+    # similar to runpath= except DT_RPATH is modifed/created in DYNAMIC segment.
+    # @param [String] rpath
+    # @macro note_apply
+    def rpath=(rpath)
+      @set[:rpath] = rpath
     end
 
     # Set runpath.
@@ -184,8 +200,8 @@ module PatchELF
     end
 
     # @return [String?]
-    def runpath_
-      tag_name_or_log(@rpath_sym, "Entry DT_#{@rpath_sym.to_s.upcase} not found.")
+    def runpath_(rpath_sym = :runpath)
+      tag_name_or_log(rpath_sym, "Entry DT_#{rpath_sym.to_s.upcase} not found.")
     end
 
     # @return [String?]

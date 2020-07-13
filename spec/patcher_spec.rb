@@ -109,6 +109,29 @@ describe PatchELF::Patcher do
     end
   end
 
+  describe 'rpath=' do
+    it 'overwrites rpath' do
+      patcher = get_patcher('rpath.elf')
+      patcher.rpath = 'o O' # picking different sym to avoid confusion
+      with_tempfile do |tmp|
+        patcher.save tmp
+        expect(described_class.new(tmp).rpath).to eq 'o O'
+      end
+    end
+
+    it 'writing to rpath leaves runpath untouched' do
+      patcher = get_patcher('runpath.elf')
+      patcher.rpath = 'o O'
+      with_tempfile do |tmp|
+        patcher.save tmp
+
+        saved_patcher = described_class.new(tmp)
+        expect(saved_patcher.runpath).to eq patcher.runpath
+        expect(saved_patcher.rpath).to eq 'o O'
+      end
+    end
+  end
+
   describe 'needed' do
     it 'combo' do
       patcher = get_patcher('pie.elf')
