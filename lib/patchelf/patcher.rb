@@ -19,13 +19,21 @@ module PatchELF
     # @param [String] filename
     #   Filename of input ELF.
     # @param [Boolean] logging
-    #   Whether to use a (stderr-initialized) logger for errors
-    def initialize(filename, logging: true)
+    #   *deprecated*: use +on_error+ instead
+    # @param [:log, :silent, :exception] on_error
+    #   action when the desired segment/tag field isn't present
+    #     :log = logs to stderr
+    #     :exception = raise exception related to the error
+    #     :silent = ignore the errors
+    def initialize(filename, on_error: :log, logging: true)
       @in_file = filename
       @elf = ELFTools::ELFFile.new(File.open(filename))
       @set = {}
       @rpath_sym = :runpath
-      @logging = logging
+      @on_error = !logging ? :exception : on_error
+
+      on_error_syms = %i[exception log silent]
+      raise ArgumentError, "on_error must be one of #{on_error_syms}" unless on_error_syms.include?(@on_error)
     end
 
     # @return [String?]
@@ -179,9 +187,9 @@ module PatchELF
     private
 
     def log_or_raise(msg, exception = PatchELF::PatchError)
-      raise exception, msg unless @logging
+      raise exception, msg if @on_error == :exception
 
-      PatchELF::Logger.warn(msg)
+      PatchELF::Logger.warn(msg) if @on_error == :log
     end
 
     def interpreter_
