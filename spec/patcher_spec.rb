@@ -7,8 +7,8 @@ require 'elftools'
 require 'patchelf/patcher'
 
 describe PatchELF::Patcher do
-  def get_patcher(filename, logging: true)
-    described_class.new(bin_path(filename), logging: logging)
+  def get_patcher(filename, on_error: :log)
+    described_class.new(bin_path(filename), on_error: on_error)
   end
 
   it 'get' do
@@ -24,6 +24,23 @@ describe PatchELF::Patcher do
     expect(get_patcher('runpath.elf').runpath).to eq '/not_exists:/lib:/pusheen/is/fat'
 
     expect(get_patcher('pie.elf').interpreter).to eq '/lib64/ld-linux-x86-64.so.2'
+  end
+
+  describe 'initializer arguments' do
+    it 'accepts one of [:log :silent :exception] as on_error value' do
+      accepted_syms = %i[log exception silent]
+      accepted_syms.each do |on_error|
+        expect { get_patcher('rpath.elf', on_error: on_error) }.not_to raise_error
+      end
+      expect { get_patcher('rpath.elf', on_error: :nyan) }.to raise_error(ArgumentError)
+    end
+
+    it 'returns nil on_error :silent' do
+      expect(get_patcher('libtest.so', on_error: :silent).interpreter).to be_nil
+      expect(get_patcher('rpath.elf', on_error: :silent).runpath).to be_nil
+      expect(get_patcher('runpath.elf', on_error: :silent).rpath).to be_nil
+      expect(get_patcher('static.elf', on_error: :silent).soname).to be_nil
+    end
   end
 
   describe 'save' do
@@ -46,7 +63,7 @@ describe PatchELF::Patcher do
 [WARN] No interpreter found.
       EOS
 
-      patcher = get_patcher('libtest.so', logging: false)
+      patcher = get_patcher('libtest.so', on_error: :exception)
       expect { patcher.interpreter = 'a' }.to raise_error PatchELF::MissingSegmentError
     end
 
@@ -150,19 +167,20 @@ describe PatchELF::Patcher do
 
   describe 'raises exception' do
     it 'missing segment' do
-      expect { get_patcher('libtest.so', logging: false).interpreter }.to raise_error(PatchELF::MissingSegmentError)
-      expect { get_patcher('static.elf', logging: false).needed }.to raise_error(PatchELF::MissingSegmentError)
+      MissingSegmentError = PatchELF::MissingSegmentError
+      expect { get_patcher('libtest.so', on_error: :exception).interpreter }.to raise_error(MissingSegmentError)
+      expect { get_patcher('static.elf', on_error: :exception).needed }.to raise_error(MissingSegmentError)
     end
 
     it 'raises missing segment when queried for DT_tag' do
-      patcher = get_patcher('static.elf', logging: false)
+      patcher = get_patcher('static.elf', on_error: :exception)
       expect { patcher.runpath }.to raise_error(PatchELF::MissingSegmentError)
       expect { patcher.soname }.to raise_error(PatchELF::MissingSegmentError)
     end
 
     it 'missing dynamic tag' do
-      expect { get_patcher('rpath.elf', logging: false).runpath }.to raise_error(PatchELF::MissingTagError)
-      expect { get_patcher('rpath.elf', logging: false).soname }.to raise_error(PatchELF::MissingTagError)
+      expect { get_patcher('rpath.elf', on_error: :exception).runpath }.to raise_error(PatchELF::MissingTagError)
+      expect { get_patcher('rpath.elf', on_error: :exception).soname }.to raise_error(PatchELF::MissingTagError)
     end
   end
 end
