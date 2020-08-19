@@ -174,7 +174,7 @@ module PatchELF
     # @param [String?] out_file
     #   If +out_file+ is +nil+, the original input file will be modified.
     # @param [Boolean] patchelf_compatible
-    #   When +patchelf_compatible+ is true, tries to produces the ELF same as the one produced by patchelf.
+    #   When +patchelf_compatible+ is true, tries to produces the ELF same as the one produced by NixOS/patchelf.
     # @return [void]
     def save(out_file = nil, patchelf_compatible: false)
       # If nothing is modified, return directly.
