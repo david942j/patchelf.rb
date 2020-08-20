@@ -114,6 +114,9 @@ module PatchELF
       end
     end
 
+    # the idea of uniquely identifying section by its name has its problems
+    # but this is how patchelf operates and is prone to bugs.
+    # e.g: https://github.com/NixOS/patchelf/issues/197
     def find_section(sec_name)
       idx = find_section_idx sec_name
       return unless idx
@@ -644,29 +647,36 @@ module PatchELF
       end
     end
 
-    def sort_shdrs!
+    # section headers may contain sh_info and sh_link values that are
+    # references to another section
+    def collect_section_to_section_refs
       rel_syms = [ELFTools::Constants::SHT_REL, ELFTools::Constants::SHT_RELA]
-
-      # Translate sh_link mappings to section names, since sorting the
-      # sections will invalidate the sh_link fields.
-      # similar for sh_info
-      linkage, info = @sections.each_with_object([{}, {}]) do |s, (link, info)|
+      # Translate sh_link, sh_info mappings to section names.
+      @sections.each_with_object({ linkage: {}, info: {} }) do |s, collected|
         hdr = s.header
-        link[s.name] = @sections[hdr.sh_link].name if hdr.sh_link.nonzero?
-        info[s.name] = @sections[hdr.sh_info].name if hdr.sh_info.nonzero? && rel_syms.include?(hdr.sh_type)
+        collected[:linkage][s.name] = @sections[hdr.sh_link].name if hdr.sh_link.nonzero?
+        collected[:info][s.name] = @sections[hdr.sh_info].name if hdr.sh_info.nonzero? && rel_syms.include?(hdr.sh_type)
       end
-      shstrtab_name = @sections[ehdr.e_shstrndx].name
+    end
 
-      @sections.sort! { |me, you| me.header.sh_offset.to_i <=> you.header.sh_offset.to_i }
-      update_section_idx!
-
-      # restore sh_info, sh_link
+    # @param collected
+    # this must be the value returned by +collect_section_to_section_refs+
+    def restore_section_to_section_refs!(collected)
+      rel_syms = [ELFTools::Constants::SHT_REL, ELFTools::Constants::SHT_RELA]
+      linkage, info = collected.values_at(:linkage, :info)
       @sections.each do |sec|
         hdr = sec.header
         hdr.sh_link = find_section_idx(linkage[sec.name]) if hdr.sh_link.nonzero?
-        hdr.sh_info = find_section_idx info[sec.name] if hdr.sh_info.nonzero? && rel_syms.include?(hdr.sh_type)
+        hdr.sh_info = find_section_idx(info[sec.name]) if hdr.sh_info.nonzero? && rel_syms.include?(hdr.sh_type)
       end
+    end
 
+    def sort_shdrs!
+      section_dep_values = collect_section_to_section_refs
+      shstrtab_name = @sections[ehdr.e_shstrndx].name
+      @sections.sort! { |me, you| me.header.sh_offset.to_i <=> you.header.sh_offset.to_i }
+      update_section_idx!
+      restore_section_to_section_refs!(section_dep_values)
       ehdr.e_shstrndx = find_section_idx shstrtab_name
     end
 
