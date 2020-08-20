@@ -38,6 +38,9 @@ module PatchELF
       @buffer = StringIO.new(f.tap(&:rewind).read) # StringIO makes easier to work with Bindata
 
       @ehdr = @elf.header
+      @endian = @elf.endian
+      @elf_class = @elf.elf_class
+
       @segments = @elf.segments # usage similar to phdrs
       @sections = @elf.sections # usage similar to shdrs
       update_section_idx!
@@ -61,7 +64,7 @@ module PatchELF
 
     private
 
-    attr_reader :ehdr
+    attr_reader :ehdr, :endian, :elf_class
 
     def buf_cstr(off)
       cstr = []
@@ -97,7 +100,7 @@ module PatchELF
 
       shdr = sec.header
       with_buf_at(shdr.sh_offset) do |buf|
-        dyn = ELFTools::Structs::ELF_Dyn.new(elf_class: shdr.elf_class, endian: shdr.class.self_endian)
+        dyn = ELFTools::Structs::ELF_Dyn.new(elf_class: elf_class, endian: endian)
         loop do
           buf_dyn_offset = buf.tell
           dyn.clear
@@ -151,9 +154,6 @@ module PatchELF
 
       shdr_dynstr = dynstr.header
       strtab_off = shdr_dynstr.sh_offset
-
-      endian = shdr_dynstr.class.self_endian
-      elf_class = shdr_dynstr.elf_class
 
       dyn_rpath = dyn_runpath = nil
       dyn_num_bytes = nil
@@ -264,12 +264,6 @@ module PatchELF
     def normalize_note_segments!
       sht_note = ELFTools::Constants::SHT_NOTE
       return if @replaced_sections.none? { |sec_name, _| find_section(sec_name).header.sh_type == sht_note }
-
-      endian = elf_class = nil
-      @sections.first.header.tap do |shdr|
-        endian = shdr.class.self_endian
-        elf_class = shdr.elf_class
-      end
 
       # new segments maybe be added as we iterate
       (1...@segments.count).each do |idx|
@@ -416,11 +410,9 @@ module PatchELF
       old_sections = @elf.sections
       symtabs = [ELFTools::Constants::SHT_SYMTAB, ELFTools::Constants::SHT_DYNSYM]
 
-      endian = ehdr.class.self_endian
-
       # resort to manual packing and unpacking of data,
       # as using bindata is painfully slow :(
-      if ehdr.elf_class == 32
+      if elf_class == 32
         sym_num_bytes = 16 # u32 u32 u32 u8 u8 u16
         pack_code = endian == :little ? 'VVVCCv' : 'NNNCCn'
         pack_st_info = 3
@@ -611,8 +603,8 @@ module PatchELF
 
       ehdr.e_phnum += 1
       ehdr.e_phoff = ehdr.num_bytes
-      phdr = ELFTools::Structs::ELF_Phdr[@elf.elf_class].new(
-        endian: @elf.endian,
+      phdr = ELFTools::Structs::ELF_Phdr[elf_class].new(
+        endian: endian,
         p_type: ELFTools::Constants::PT_LOAD,
         p_offset: start_offset,
         p_vaddr: start_page,
@@ -659,7 +651,7 @@ module PatchELF
 
       ehdr.e_phnum += 1
       phdr = ELFTools::Structs::ELF_Phdr[@elf.elf_class].new(
-        endian: @elf.endian,
+        endian: endian,
         p_type: ELFTools::Constants::PT_LOAD,
         p_offset: 0,
         p_vaddr: start_page,
