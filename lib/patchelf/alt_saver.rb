@@ -264,6 +264,15 @@ module PatchELF
       raise NotImplementedError
     end
 
+    def add_segment!(**phdr_vals)
+      new_phdr = ELFTools::Structs::ELF_Phdr[elf_class].new(endian: endian, **phdr_vals)
+      # nil = no reference to stream; we only want @segments[i].header
+      new_segment = ELFTools::Segments::Segment.new(new_phdr, nil)
+      @segments.push new_segment
+      ehdr.e_phnum += 1
+      nil
+    end
+
     def normalize_note_segments!
       sht_note = ELFTools::Constants::SHT_NOTE
       return if @replaced_sections.none? { |sec_name, _| find_section(sec_name).header.sh_type == sht_note }
@@ -290,30 +299,35 @@ module PatchELF
             raise PatchELF::PatchError, 'cannot normalize PT_NOTE segment: partially mapped SHT_NOTE section.'
           end
 
-          new_phdr = ELFTools::Structs::ELF_Phdr[elf_class].new(
-            endian: endian,
-            p_type: phdr.p_type,
-            p_offset: curr_off,
+          # values are cast .to_i to avoid shallow assignment.
+          #
+          # e.g on how shallow copying can go wrong
+          #   phdr.p_type = 4
+          #   x = phdr.p_type
+          #   phdr.assign({p_type: x})
+          # then if we expect (phdr.p_type == 4), guess what, we are wrong
+          # (phdr.p_type == 0) similarly x also equals 0, as they both refer to same object.
+          #
+          phdr_vals = {
+            p_type: phdr.p_type.to_i,
+            p_offset: curr_off.to_i,
             p_vaddr: phdr.p_vaddr + (curr_off - start_off),
             p_paddr: phdr.p_paddr + (curr_off - start_off),
             p_filesz: size,
             p_memsz: size,
-            p_flags: phdr.p_flags,
-            p_align: phdr.p_align
-          )
-
-          new_segment = ELFTools::Segments::Segment.new(new_phdr, nil)
+            p_flags: phdr.p_flags.to_i,
+            p_align: phdr.p_align.to_i
+          }
 
           if curr_off == start_off
-            @segments[idx] = new_segment
+            @segments[idx].header.assign(phdr_vals)
           else
-            @segments.push new_segment
+            add_segment!(**phdr_vals)
           end
 
           curr_off += size
         end
       end
-      ehdr.e_phnum = @segments.count
     end
 
     def page_size
@@ -573,10 +587,8 @@ module PatchELF
         start_page = start_offset
       end
 
-      ehdr.e_phnum += 1
       ehdr.e_phoff = ehdr.num_bytes
-      phdr = ELFTools::Structs::ELF_Phdr[elf_class].new(
-        endian: endian,
+      add_segment!(
         p_type: ELFTools::Constants::PT_LOAD,
         p_offset: start_offset,
         p_vaddr: start_page,
@@ -586,8 +598,6 @@ module PatchELF
         p_flags: ELFTools::Constants::PF_R | ELFTools::Constants::PF_W,
         p_align: page_size
       )
-      # no stream
-      @segments.push ELFTools::Segments::Segment.new(phdr, nil)
 
       normalize_note_segments!
 
@@ -621,9 +631,7 @@ module PatchELF
         phdr.p_align = page_size if phdr.p_align != 0 && (phdr.p_vaddr - phdr.p_offset) % phdr.p_align != 0
       end
 
-      ehdr.e_phnum += 1
-      phdr = ELFTools::Structs::ELF_Phdr[@elf.elf_class].new(
-        endian: endian,
+      add_segment!(
         p_type: ELFTools::Constants::PT_LOAD,
         p_offset: 0,
         p_vaddr: start_page,
@@ -633,8 +641,6 @@ module PatchELF
         p_flags: ELFTools::Constants::PF_R | ELFTools::Constants::PF_W,
         p_align: page_size
       )
-      # no stream
-      @segments.push ELFTools::Segments::Segment.new(phdr, nil)
     end
 
     def sort_phdrs!
