@@ -347,6 +347,23 @@ module PatchELF
       @replaced_sections[section_name] = rep_data
     end
 
+    def write_phdrs_to_buf!
+      sort_phdrs!
+      with_buf_at(ehdr.e_phoff) do |buf|
+        @segments.each { |seg| seg.header.write(buf) }
+      end
+    end
+
+    def write_shdrs_to_buf!
+      raise PatchELF::PatchError, 'ehdr.e_shnum != @sections.count' if ehdr.e_shnum != @sections.count
+
+      sort_shdrs!
+      with_buf_at(ehdr.e_shoff) do |buf|
+        @sections.each { |section| section.header.write(buf) }
+      end
+      sync_dyn_tags!
+    end
+
     def rewrite_headers(phdr_address)
       # there can only be a single program header table according to ELF spec
       @segments.find { |seg| seg.header.p_type == ELFTools::Constants::PT_PHDR }&.tap do |seg|
@@ -356,56 +373,8 @@ module PatchELF
         phdr.p_filesz = phdr.p_memsz = phdr.num_bytes * @segments.count # e_phentsize * e_phnum
       end
 
-      sort_phdrs!
-      with_buf_at(ehdr.e_phoff) do |buf|
-        @segments.each { |seg| seg.header.write(buf) }
-      end
-      raise PatchELF::PatchError, 'ehdr.e_shnum /= @sections.count' unless ehdr.e_shnum == @sections.count
-
-      sort_shdrs!
-      with_buf_at(ehdr.e_shoff) do |buf|
-        @sections.each { |section| section.header.write(buf) }
-      end
-
-      each_dynamic_tags do |dyn, buf_off|
-        case dyn.d_tag
-        when ELFTools::Constants::DT_STRTAB
-          dyn.d_val = dynstr.header.sh_addr.to_i
-        when ELFTools::Constants::DT_STRSZ
-          dyn.d_val = dynstr.header.sh_size.to_i
-        when ELFTools::Constants::DT_SYMTAB
-          dyn.d_val = find_section('.dynsym').header.sh_addr.to_i
-        when ELFTools::Constants::DT_HASH
-          dyn.d_val = find_section('.hash').header.sh_addr.to_i
-        when ELFTools::Constants::DT_GNU_HASH
-          dyn.d_val = find_section('.gnu.hash').header.sh_addr.to_i
-        when ELFTools::Constants::DT_JMPREL
-          shdr = @sections.find { |s| %w[.rel.plt .rela.plt .rela.IA_64.pltoff].include? s.name }&.header
-          raise PatchELF::PatchError, 'cannot find section corresponding to DT_JMPREL' if shdr.nil?
-
-          dyn.d_val = shdr.sh_addr.to_i
-        when ELFTools::Constants::DT_REL
-          # regarding .rel.got, NixOS/patchelf says
-          # "no idea if this makes sense, but it was needed for some program"
-          shdr = @sections.find { |s| %w[.rel.dyn .rel.got].include? s.name }&.header
-          next if shdr.nil? # patchelf claims no problem in skipping
-
-          dyn.d_val = shdr.sh_addr.to_i
-        when ELFTools::Constants::DT_RELA
-          shdr = find_section('.rela.dyn')&.header
-          next if shdr.nil? # patchelf claims no problem in skipping
-
-          dyn.d_val = shdr.sh_addr.to_i
-        when ELFTools::Constants::DT_VERNEED
-          dyn.d_val = find_section('.gnu.version_r').header.sh_addr.to_i
-        when ELFTools::Constants::DT_VERSYM
-          dyn.d_val = find_section('.gnu.version').header.sh_addr.to_i
-        else
-          next
-        end
-
-        with_buf_at(buf_off) { |wbuf| dyn.write(wbuf) }
-      end
+      write_phdrs_to_buf!
+      write_shdrs_to_buf!
 
       old_sections = @elf.sections
       symtabs = [ELFTools::Constants::SHT_SYMTAB, ELFTools::Constants::SHT_DYNSYM]
@@ -699,6 +668,51 @@ module PatchELF
       end
 
       ehdr.e_shstrndx = find_section_idx shstrtab_name
+    end
+
+    # given a +dyn.d_tag+, returns the section name it must be synced to.
+    def dyn_tag_to_section_name(d_tag)
+      case d_tag
+      when ELFTools::Constants::DT_STRTAB, ELFTools::Constants::DT_STRSZ
+        '.dynstr'
+      when ELFTools::Constants::DT_SYMTAB
+        '.dynsym'
+      when ELFTools::Constants::DT_HASH
+        '.hash'
+      when ELFTools::Constants::DT_GNU_HASH
+        '.gnu.hash'
+      when ELFTools::Constants::DT_JMPREL
+        sec_name = %w[.rel.plt .rela.plt .rela.IA_64.pltoff].find { |s| find_section(s) }
+        raise PatchELF::PatchError, 'cannot find section corresponding to DT_JMPREL' unless sec_name
+
+        sec_name
+      when ELFTools::Constants::DT_REL
+        # regarding .rel.got, NixOS/patchelf says
+        # "no idea if this makes sense, but it was needed for some program"
+        #
+        # return nil if not found, patchelf claims no problem in skipping
+        %w[.rel.dyn .rel.got].find { |s| find_section(s) }
+      when ELFTools::Constants::DT_RELA
+        # return nil if not found, patchelf claims no problem in skipping
+        find_section('.rela.dyn')&.name
+      when ELFTools::Constants::DT_VERNEED
+        '.gnu.version_r'
+      when ELFTools::Constants::DT_VERSYM
+        '.gnu.version'
+      end
+    end
+
+    # updates dyn tags by syncing it with @section values
+    def sync_dyn_tags!
+      each_dynamic_tags do |dyn, buf_off|
+        sec_name = dyn_tag_to_section_name(dyn.d_tag)
+        next unless sec_name
+
+        shdr = find_section(sec_name).header
+        dyn.d_val = dyn.d_tag == ELFTools::Constants::DT_STRSZ ? shdr.sh_size.to_i : shdr.sh_addr.to_i
+
+        with_buf_at(buf_off) { |wbuf| dyn.write(wbuf) }
+      end
     end
 
     def update_section_idx!
