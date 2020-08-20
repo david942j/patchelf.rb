@@ -10,15 +10,17 @@ require 'patchelf/helper'
 
 module PatchELF
   # Internal use only.
+  # alternative to +Saver+, that aims to be byte to byte equivalent with NixOS/patchelf.
   #
-  # For {Patcher} to do patching things and save to file.
+  # *DISCLAIMER*: This differs from +Saver+ in number of ways.  No lazy reading,
+  # inconsistent use of existing internal API(e.g: manual reading of data instead of calling +section.data+)
   # @private
   class AltSaver
-    # using ELFTools
     attr_reader :in_file # @return [String] Input filename.
     attr_reader :out_file # @return [String] Output filename.
 
-    # Instantiate a {Saver} object.
+    # Instantiate a {AltSaver} object.
+    # the params passed are the same as the ones passed to +Saver+
     # @param [String] in_file
     # @param [String] out_file
     # @param [{Symbol => String, Array}] set
@@ -27,7 +29,11 @@ module PatchELF
       @out_file = out_file
       @set = set
 
-      f = File.open(in_file, 'rb+')
+      f = File.open(in_file, 'rb')
+      # the +@buffer+ and +@elf+ both could work on same +StringIO+ stream,
+      # the updating of @buffer in place blocks us from looking up old values.
+      # TODO: cache the values needed later, use same stream for +@buffer+ and +@elf+.
+      # also be sure to update the stream offset passed to Segments::Segment.
       @elf = ELFTools::ELFFile.new(f)
       @buffer = StringIO.new(f.tap(&:rewind).read) # StringIO makes easier to work with Bindata
 
@@ -113,7 +119,6 @@ module PatchELF
     end
 
     def find_section_idx(sec_name)
-      # @sections.find_index { |s| s.name == sec_name }
       @section_idx_by_name[sec_name]
     end
 
@@ -129,6 +134,7 @@ module PatchELF
     end
 
     def modify_needed
+      # due to gsoc time constraints only implmenting features used by brew.
       raise NotImplementedError
     end
 
@@ -251,6 +257,7 @@ module PatchELF
     def modify_soname
       return unless ehdr.e_type == ELFTools::Constants::ET_DYN
 
+      # due to gsoc time constraints only implmenting features used by brew.
       raise NotImplementedError
     end
 
@@ -319,7 +326,7 @@ module PatchELF
     def patch_out
       with_buf_at(0) { |b| ehdr.write(b) }
 
-      File.open(out_file, 'wb+') do |f|
+      File.open(out_file, 'wb') do |f|
         @buffer.rewind
         f.write @buffer.read
       end
@@ -330,6 +337,10 @@ module PatchELF
       data = @replaced_sections[section_name]
       unless data
         shdr = find_section(section_name).header
+        # avoid calling +section.data+ as the @buffer contents may vary from
+        # the stream provided to section at initialization.
+        # ideally, calling section.data should work, however avoiding it to prevent
+        # future traps.
         with_buf_at(shdr.sh_offset) { |b| data = b.read shdr.sh_size }
       end
       rep_data = if data.size == size
@@ -508,7 +519,7 @@ module PatchELF
       # PatchELF::Logger.info "first reserved offset/addr is 0x#{start_offset.to_i.to_s 16}/0x#{start_addr.to_i.to_s 16}"
 
       unless start_addr % page_size == start_offset % page_size
-        raise PatchELF::PatchError, 'start_addr /= start_offset (mod PAGE_SIZE)'
+        raise PatchELF::PatchError, 'start_addr != start_offset (mod PAGE_SIZE)'
       end
 
       first_page = start_addr - start_offset
@@ -519,7 +530,7 @@ module PatchELF
         sh_size = ehdr.e_shoff + ehdr.e_shnum * ehdr.e_shentsize
         grow_file @buffer.size + sh_size
         ehdr.e_shoff = shoff_new
-        raise PatchELF::PatchError, 'ehdr.e_shnum /= @sections.size' unless ehdr.e_shnum == @sections.size
+        raise PatchELF::PatchError, 'ehdr.e_shnum != @sections.size' if ehdr.e_shnum != @sections.size
 
         with_buf_at(ehdr.e_shoff + @sections.first.header.num_bytes) do |buf| # skip writing to NULL section
           @sections.each_with_index do |sec, idx|
@@ -562,7 +573,7 @@ module PatchELF
       with_buf_at(cur_off) { |buf| buf.write "\x00" * (start_offset - cur_off) }
       cur_off = write_replaced_sections cur_off, first_page, 0
       # PatchELF::Logger.info " cur_off = #{cur_off} "
-      raise PatchELF::PatchError, 'cur_off /= needed_space' if cur_off != needed_space
+      raise PatchELF::PatchError, 'cur_off != needed_space' if cur_off != needed_space
 
       rewrite_headers first_page + ehdr.e_phoff
     end
@@ -617,7 +628,7 @@ module PatchELF
       normalize_note_segments!
 
       cur_off = write_replaced_sections start_offset, start_page, start_offset
-      raise PatchELF::PatchError, 'cur_off /= start_offset+needed_space' if cur_off != start_offset + needed_space
+      raise PatchELF::PatchError, 'cur_off != start_offset+needed_space' if cur_off != start_offset + needed_space
 
       rewrite_headers ehdr.e_phoff
     end
