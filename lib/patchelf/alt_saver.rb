@@ -273,60 +273,61 @@ module PatchELF
       nil
     end
 
+    def normalize_note_segment!(phdr, note_sections: [])
+      start_off = phdr.p_offset
+      curr_off = start_off
+      end_off = phdr.p_offset + phdr.p_filesz
+
+      while curr_off < end_off
+        note_sec = note_sections.find { |s| s.header.sh_offset == curr_off }
+        if note_sec.nil?
+          raise PatchELF::PatchError, 'cannot normalize PT_NOTE segment: non-contiguous SHT_NOTE sections'
+        end
+
+        size = note_sec.header.sh_size
+        if curr_off + size > end_off
+          raise PatchELF::PatchError, 'cannot normalize PT_NOTE segment: partially mapped SHT_NOTE section.'
+        end
+
+        # avoid shallow assignment by forcing .to_i
+        #
+        # e.g on how shallow copying can go wrong
+        #   phdr.p_type = 4
+        #   x = phdr.p_type
+        #   phdr.assign({p_type: x})
+        # then if we expect (phdr.p_type == 4), guess what, we are wrong
+        # (phdr.p_type == 0) similarly x also equals 0, as they both refer to same object.
+        phdr_vals = {
+          p_type: phdr.p_type.to_i,
+          p_offset: curr_off.to_i,
+          p_vaddr: phdr.p_vaddr + (curr_off - start_off),
+          p_paddr: phdr.p_paddr + (curr_off - start_off),
+          p_filesz: size,
+          p_memsz: size,
+          p_flags: phdr.p_flags.to_i,
+          p_align: phdr.p_align.to_i
+        }
+
+        if curr_off == start_off
+          phdr.assign(phdr_vals)
+        else
+          add_segment!(**phdr_vals)
+        end
+
+        curr_off += size
+      end
+    end
+
     def normalize_note_segments!
+      pt_note = ELFTools::Constants::PT_NOTE
       sht_note = ELFTools::Constants::SHT_NOTE
       return if @replaced_sections.none? { |sec_name, _| find_section(sec_name).header.sh_type == sht_note }
 
-      # new segments maybe be added as we iterate
+      note_sections = @sections.filter { |sec| sec.header.sh_type == sht_note }
+      # can't .each, new segments maybe be added as we iterate
       (1...@segments.count).each do |idx|
-        seg = @segments[idx]
-        phdr = seg.header
-
-        next if phdr.p_type != ELFTools::Constants::PT_NOTE
-
-        start_off = phdr.p_offset
-        curr_off = start_off
-        end_off = phdr.p_offset + phdr.p_filesz
-
-        while curr_off < end_off
-          note_sec = @sections.find { |s| s.header.sh_type == sht_note && s.header.sh_offset == curr_off }
-          if note_sec.nil?
-            raise PatchELF::PatchError, 'cannot normalize PT_NOTE segment: non-contiguous SHT_NOTE sections'
-          end
-
-          size = note_sec.header.sh_size
-          if curr_off + size > end_off
-            raise PatchELF::PatchError, 'cannot normalize PT_NOTE segment: partially mapped SHT_NOTE section.'
-          end
-
-          # values are cast .to_i to avoid shallow assignment.
-          #
-          # e.g on how shallow copying can go wrong
-          #   phdr.p_type = 4
-          #   x = phdr.p_type
-          #   phdr.assign({p_type: x})
-          # then if we expect (phdr.p_type == 4), guess what, we are wrong
-          # (phdr.p_type == 0) similarly x also equals 0, as they both refer to same object.
-          #
-          phdr_vals = {
-            p_type: phdr.p_type.to_i,
-            p_offset: curr_off.to_i,
-            p_vaddr: phdr.p_vaddr + (curr_off - start_off),
-            p_paddr: phdr.p_paddr + (curr_off - start_off),
-            p_filesz: size,
-            p_memsz: size,
-            p_flags: phdr.p_flags.to_i,
-            p_align: phdr.p_align.to_i
-          }
-
-          if curr_off == start_off
-            @segments[idx].header.assign(phdr_vals)
-          else
-            add_segment!(**phdr_vals)
-          end
-
-          curr_off += size
-        end
+        phdr = @segments[idx].header
+        normalize_note_segment!(phdr, note_sections: note_sections) if phdr.p_type == pt_note
       end
     end
 
