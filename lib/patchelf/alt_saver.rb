@@ -4,31 +4,9 @@ require 'elftools/constants'
 require 'elftools/elf_file'
 require 'elftools/structs'
 require 'elftools/util'
-require 'patchelf/helper'
 require 'fileutils'
 
-module ELFTools
-  module Constants
-    module PF
-      PF_X = 1
-      PF_W = 2
-      PF_R = 4
-    end
-    include PF
-
-    module SHN
-      SHN_UNDEF     =	0      # undefined section
-      SHN_LORESERVE = 0xff00 # start of reserved indices
-      SHN_HIRESERVE = 0xffff # end of reserved indices
-    end
-    include SHN
-
-    module DT
-      DT_VERSYM	= 0x6ffffff0
-    end
-    include DT
-  end
-end
+require 'patchelf/helper'
 
 module PatchELF
   # Internal use only.
