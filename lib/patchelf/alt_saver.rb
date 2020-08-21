@@ -793,12 +793,42 @@ module PatchELF
       nil
     end
 
+    def sync_sec_to_seg(shdr, phdr)
+      phdr.p_offset = shdr.sh_offset.to_i
+      phdr.p_vaddr = phdr.p_paddr = shdr.sh_addr.to_i
+      phdr.p_filesz = phdr.p_memsz = shdr.sh_size.to_i
+    end
+
+    def phdrs_by_type(seg_type)
+      return unless seg_type
+
+      @segments.each_with_index do |seg, idx|
+        next unless (phdr = seg.header).p_type == seg_type
+
+        yield phdr, idx
+      end
+    end
+
+    def find_matching_note_segment_idx(orig_shdr, skip_indices: nil)
+      matching_idx = nil
+
+      phdrs_by_type(ELFTools::Constants::PT_NOTE) do |phdr, seg_idx|
+        next if skip_indices.member?(seg_idx)
+
+        sec_range = (orig_shdr.sh_offset.to_i)...(orig_shdr.sh_offset + orig_shdr.sh_size)
+        seg_range = (phdr.p_offset.to_i)...(phdr.p_offset + phdr.p_filesz)
+        next unless seg_range.cover?(sec_range.first) || seg_range.cover?(*sec_range.last(1))
+
+        raise PatchELF::PatchError, 'unsupported overlap of SHT_NOTE and PT_NOTE' if seg_range != sec_range
+
+        matching_idx = seg_idx
+        break
+      end
+      matching_idx
+    end
+
     def write_replaced_sections(cur_off, start_addr, start_offset)
-      sht_note = ELFTools::Constants::SHT_NOTE
       sht_no_bits = ELFTools::Constants::SHT_NOBITS
-      pt_interp = ELFTools::Constants::PT_INTERP
-      pt_dynamic = ELFTools::Constants::PT_DYNAMIC
-      pt_note = ELFTools::Constants::PT_NOTE
 
       # the original source says this has to be done seperately to
       # prevent clobbering the previously written section contents.
@@ -812,8 +842,13 @@ module PatchELF
       # is different, patchelf v0.10 iterates the replaced_sections sorted by
       # keys.
       @replaced_sections.sort.each do |rsec_name, rsec_data|
-        shdr = find_section(rsec_name).header
-        orig_shdr = shdr.new(**shdr.snapshot) # hack! (probably) doesn't work for updating
+        section = find_section(rsec_name)
+        shdr = section.header
+
+        if shdr.sh_type == ELFTools::Constants::SHT_NOTE
+          note_seg_idx = find_matching_note_segment_idx(shdr, skip_indices: noted_segments)
+          orig_sh_addralign = shdr.sh_addralign.to_i
+        end
 
         # dbg_msg = <<~INFO
         #   rewriting section '#{rsec_name}' from offset
@@ -829,34 +864,18 @@ module PatchELF
         shdr.sh_size = rsec_data.size
         shdr.sh_addralign = @section_alignment
 
-        if ['.interp', '.dynamic'].include? rsec_name
-          seg_type = rsec_name == '.interp' ? pt_interp : pt_dynamic
-          @segments.each do |seg|
-            next unless (phdr = seg.header).p_type == seg_type
+        seg_type = {
+          '.interp' => ELFTools::Constants::PT_INTERP,
+          '.dynamic' => ELFTools::Constants::PT_DYNAMIC
+        }[section.name]
 
-            phdr.p_offset = shdr.sh_offset.to_i
-            phdr.p_vaddr = phdr.p_paddr = shdr.sh_addr.to_i
-            phdr.p_filesz = phdr.p_memsz = shdr.sh_size.to_i
-          end
-        end
+        phdrs_by_type(seg_type) { |phdr| sync_sec_to_seg(shdr, phdr) }
 
-        if shdr.sh_type == sht_note
-          shdr.sh_addralign = orig_shdr.sh_addralign.to_i if orig_shdr.sh_addralign < @section_alignment
-
-          @segments.each_with_index do |seg, seg_idx|
-            next if (phdr = seg.header).p_type != pt_note || noted_segments.member?(seg_idx)
-
-            sec_range = (orig_shdr.sh_offset.to_i)...(orig_shdr.sh_offset + orig_shdr.sh_size)
-            seg_range = (phdr.p_offset.to_i)...(phdr.p_offset + phdr.p_filesz)
-
-            next unless seg_range.cover?(sec_range.first) || seg_range.cover?(*sec_range.last(1))
-
-            raise PatchELF::PatchError, 'unsupported overlap of SHT_NOTE and PT_NOTE' if seg_range != sec_range
-
-            noted_segments.add(seg_idx)
-            phdr.p_offset = shdr.sh_offset.to_i
-            phdr.p_paddr = phdr.p_vaddr = shdr.sh_addr.to_i
-            phdr.p_filesz = phdr.p_memsz = shdr.sh_size.to_i
+        if shdr.sh_type == ELFTools::Constants::SHT_NOTE
+          shdr.sh_addralign = orig_sh_addralign if orig_sh_addralign < @section_alignment
+          if note_seg_idx
+            noted_segments.add(note_seg_idx)
+            sync_sec_to_seg(shdr, @segments[note_seg_idx].header)
           end
         end
 
