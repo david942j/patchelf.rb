@@ -144,23 +144,22 @@ module PatchELF
       raise NotImplementedError
     end
 
+    # not checking for nil as modify_rpath is only called if @set[:rpath]
     def modify_rpath
       modify_rpath_helper @set[:rpath], force_rpath: true
     end
 
+    # not checking for nil as modify_runpath is only called if @set[:runpath]
     def modify_runpath
       modify_rpath_helper @set[:runpath]
     end
 
     def modify_rpath_helper(new_rpath, force_rpath: false)
-      return if new_rpath.nil?
 
       shdr_dynstr = dynstr.header
       strtab_off = shdr_dynstr.sh_offset
 
       dyn_rpath = dyn_runpath = nil
-      dyn_num_bytes = nil
-      dt_null_idx = 0
       rpath_off = nil
       dyn_buf_off = {}
 
@@ -180,8 +179,6 @@ module PatchELF
           dyn_runpath.d_val = dyn.d_val.to_i
           rpath_off = strtab_off + dyn.d_val
         end
-        dyn_num_bytes ||= dyn.num_bytes
-        dt_null_idx += 1
       end
       old_rpath = rpath_off ? buf_cstr(rpath_off) : ''
 
@@ -237,24 +234,10 @@ module PatchELF
       end
       return if dyn_rpath || dyn_runpath
 
-      # allot for new dt_runpath
-      shdr_dynamic = find_section('.dynamic').header
-      new_dynamic_data = replace_section '.dynamic', shdr_dynamic.sh_size + dyn_num_bytes
-
-      # consider DT_NULL when copying
-      replacement_size = (dt_null_idx + 1) * dyn_num_bytes
-
-      # make space for dt_runpath tag at the top, shift data by one tag positon
-      new_dynamic_data[dyn_num_bytes..(replacement_size + dyn_num_bytes)] = new_dynamic_data[0..replacement_size]
-
-      dyn_rpath = ELFTools::Structs::ELF_Dyn.new endian: endian, elf_class: elf_class
-      dyn_rpath.d_tag = force_rpath ? ELFTools::Constants::DT_RPATH : ELFTools::Constants::DT_RUNPATH
-      dyn_rpath.d_val = new_rpath_strtab_idx
-
-      zi = StringIO.new
-      dyn_rpath.write zi
-      zi.rewind
-      new_dynamic_data[0..dyn_num_bytes] = zi.read
+      add_dt_rpath!(
+        d_tag: force_rpath ? ELFTools::Constants::DT_RPATH : ELFTools::Constants::DT_RUNPATH,
+        d_val: new_rpath_strtab_idx
+      )
     end
 
     def modify_soname
@@ -271,6 +254,34 @@ module PatchELF
       @segments.push new_segment
       ehdr.e_phnum += 1
       nil
+    end
+
+    def add_dt_rpath!(d_tag: nil, d_val: nil)
+      dyn_num_bytes = nil
+      dt_null_idx = 0
+      each_dynamic_tags do |dyn|
+        dyn_num_bytes ||= dyn.num_bytes
+        dt_null_idx += 1
+      end
+
+      # allot for new dt_runpath
+      shdr_dynamic = find_section('.dynamic').header
+      new_dynamic_data = replace_section '.dynamic', shdr_dynamic.sh_size + dyn_num_bytes
+
+      # consider DT_NULL when copying
+      replacement_size = (dt_null_idx + 1) * dyn_num_bytes
+
+      # make space for dt_runpath tag at the top, shift data by one tag positon
+      new_dynamic_data[dyn_num_bytes..(replacement_size + dyn_num_bytes)] = new_dynamic_data[0..replacement_size]
+
+      dyn_rpath = ELFTools::Structs::ELF_Dyn.new endian: endian, elf_class: elf_class
+      dyn_rpath.d_tag = d_tag
+      dyn_rpath.d_val = d_val
+
+      zi = StringIO.new
+      dyn_rpath.write zi
+      zi.rewind
+      new_dynamic_data[0...dyn_num_bytes] = zi.read
     end
 
     def normalize_note_segment!(phdr, note_sections: [])
@@ -688,6 +699,8 @@ module PatchELF
     end
 
     # given a +dyn.d_tag+, returns the section name it must be synced to.
+    # it may return nil, when given tag maps to no section,
+    # or when its okay to skip if section is not found.
     def dyn_tag_to_section_name(d_tag)
       case d_tag
       when ELFTools::Constants::DT_STRTAB, ELFTools::Constants::DT_STRSZ
