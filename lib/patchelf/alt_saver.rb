@@ -602,14 +602,10 @@ module PatchELF
       rewrite_headers first_page + ehdr.e_phoff
     end
 
-    def rewrite_sections_library
-      start_page =
-        @segments.map { |seg| Helper.alignup(seg.header.p_vaddr + seg.header.p_memsz, page_size) }
-                 .max
-
-      # PatchELF::Logger.info "Last page is 0x#{start_page.to_s 16}"
+    def replace_sections_for_note_normalization!
       num_notes = @sections.count { |sec| sec.header.sh_type == ELFTools::Constants::SHT_NOTE }
       pht_size = ehdr.num_bytes + (@segments.count + 1 + num_notes) * @segments.first.header.num_bytes
+
       # replace sections that may overlap with expanded program header table
       @sections.each_with_index do |sec, idx|
         shdr = sec.header
@@ -618,7 +614,17 @@ module PatchELF
 
         replace_section sec.name, shdr.sh_size
       end
+    end
 
+    def seg_end_addr(phdr)
+      Helper.alignup(phdr.p_vaddr + phdr.p_memsz, page_size)
+    end
+
+    def rewrite_sections_library
+      start_page = seg_end_addr(@segments.max_by { |seg| seg_end_addr(seg.header) }.header)
+
+      # PatchELF::Logger.info "Last page is 0x#{start_page.to_s 16}"
+      replace_sections_for_note_normalization!
       needed_space = @replaced_sections.sum { |_, str| Helper.alignup(str.size, @section_alignment) }
       # PatchELF::Logger.info "needed space = #{needed_space}"
 
@@ -648,7 +654,7 @@ module PatchELF
       normalize_note_segments!
 
       cur_off = write_replaced_sections start_offset, start_page, start_offset
-      raise PatchELF::PatchError, 'cur_off != start_offset+needed_space' if cur_off != start_offset + needed_space
+      raise PatchError, 'cur_off != start_offset + needed_space' if cur_off != start_offset + needed_space
 
       rewrite_headers ehdr.e_phoff
     end
