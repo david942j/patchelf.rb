@@ -66,6 +66,10 @@ module PatchELF
 
     attr_reader :ehdr, :endian, :elf_class
 
+    def old_sections
+      @old_sections ||= @elf.sections
+    end
+
     def buf_cstr(off)
       cstr = []
       with_buf_at(off) do |buf|
@@ -340,6 +344,23 @@ module PatchELF
       end
     end
 
+    # given a index into old_sections table
+    # returns the corresponding section index in @sections
+    #
+    # raises ArgumentError if old_shndx can't be found in old_sections
+    # TODO: handle case of non existing section in (new) @sections.
+    def new_section_idx(old_shndx)
+      return if old_shndx == ELFTools::Constants::SHN_UNDEF || old_shndx >= ELFTools::Constants::SHN_LORESERVE
+
+      raise ArgumentError if old_shndx >= old_sections.count
+
+      old_sec = old_sections[old_shndx]
+      raise PatchELF::PatchError, "old_sections[#{shndx}] is nil" if old_sec.nil?
+
+      # TODO: handle case of non existing section in (new) @sections.
+      find_section_idx(old_sec.name)
+    end
+
     def page_size
       Helper::PAGE_SIZE
     end
@@ -391,20 +412,9 @@ module PatchELF
       sync_dyn_tags!
     end
 
-    def rewrite_headers(phdr_address)
-      # there can only be a single program header table according to ELF spec
-      @segments.find { |seg| seg.header.p_type == ELFTools::Constants::PT_PHDR }&.tap do |seg|
-        phdr = seg.header
-        phdr.p_offset = ehdr.e_phoff.to_i
-        phdr.p_vaddr = phdr.p_paddr = phdr_address.to_i
-        phdr.p_filesz = phdr.p_memsz = phdr.num_bytes * @segments.count # e_phentsize * e_phnum
-      end
-
-      write_phdrs_to_buf!
-      write_shdrs_to_buf!
-
-      old_sections = @elf.sections
-      symtabs = [ELFTools::Constants::SHT_SYMTAB, ELFTools::Constants::SHT_DYNSYM]
+    # data for manual packing and unpacking of symbols in symtab sections.
+    def meta_sym_pack
+      return @meta_sym_pack if @meta_sym_pack
 
       # resort to manual packing and unpacking of data,
       # as using bindata is painfully slow :(
@@ -422,37 +432,62 @@ module PatchELF
         pack_st_value = 4
       end
 
-      @sections.each do |sec|
-        shdr = sec.header
-        next unless symtabs.include?(shdr.sh_type)
+      @meta_sym_pack = {
+        num_bytes: sym_num_bytes, code: pack_code,
+        st_info: pack_st_info, st_shndx: pack_st_shndx, st_value: pack_st_value
+      }
+    end
 
-        with_buf_at(shdr.sh_offset) do |buf|
-          num_symbols = shdr.sh_size / sym_num_bytes
-          num_symbols.times do |entry|
-            sym = buf.read(sym_num_bytes).unpack(pack_code)
-            shndx = sym[pack_st_shndx]
+    # yields +symbol+, +entry+
+    def each_symbol(shdr)
+      return unless [ELFTools::Constants::SHT_SYMTAB, ELFTools::Constants::SHT_DYNSYM].include?(shdr.sh_type)
 
-            next if shndx == ELFTools::Constants::SHN_UNDEF || shndx >= ELFTools::Constants::SHN_LORESERVE
+      pack_code, sym_num_bytes = meta_sym_pack.values_at(:code, :num_bytes)
 
-            if shndx >= old_sections.count
-              PatchELF::Logger.warn "entry #{entry} in symbol table refers to a non existing section, skipping"
-              next
-            end
+      with_buf_at(shdr.sh_offset) do |buf|
+        num_symbols = shdr.sh_size / sym_num_bytes
+        num_symbols.times do |entry|
+          sym = buf.read(sym_num_bytes).unpack(pack_code)
+          sym_modified = yield sym, entry
 
-            old_sec = old_sections[shndx]
-            raise PatchELF::PatchError, '@elf.sections[shndx] is nil' if old_sec.nil?
-
-            new_index = find_section_idx old_sec.name
-            sym[pack_st_shndx] = new_index
-
-            # right 4 bits in the st_info field is st_type
-            if (sym[pack_st_info] & 0xF) == ELFTools::Constants::STT_SECTION
-              sym[pack_st_value] = @sections[new_index].header.sh_addr.to_i
-            end
-
+          if sym_modified
             buf.seek buf.tell - sym_num_bytes
             buf.write sym.pack(pack_code)
           end
+        end
+      end
+    end
+
+    def rewrite_headers(phdr_address)
+      # there can only be a single program header table according to ELF spec
+      @segments.find { |seg| seg.header.p_type == ELFTools::Constants::PT_PHDR }&.tap do |seg|
+        phdr = seg.header
+        phdr.p_offset = ehdr.e_phoff.to_i
+        phdr.p_vaddr = phdr.p_paddr = phdr_address.to_i
+        phdr.p_filesz = phdr.p_memsz = phdr.num_bytes * @segments.count # e_phentsize * e_phnum
+      end
+      write_phdrs_to_buf!
+      write_shdrs_to_buf!
+
+      pack = meta_sym_pack
+      @sections.each do |sec|
+        each_symbol(sec.header) do |sym, entry|
+          old_shndx = sym[pack[:st_shndx]]
+
+          begin
+            new_index = new_section_idx(old_shndx)
+            next unless new_index
+          rescue ArgumentError
+            PatchELF::Logger.warn "entry #{entry} in symbol table refers to a non existing section, skipping"
+          end
+
+          sym[pack[:st_shndx]] = new_index
+
+          # right 4 bits in the st_info field is st_type
+          if (sym[pack[:st_info]] & 0xF) == ELFTools::Constants::STT_SECTION
+            sym[pack[:st_value]] = @sections[new_index].header.sh_addr.to_i
+          end
+          true
         end
       end
     end
@@ -504,7 +539,8 @@ module PatchELF
         prev_sec_name = sec.name
       end
 
-      # PatchELF::Logger.info "first reserved offset/addr is 0x#{start_offset.to_i.to_s 16}/0x#{start_addr.to_i.to_s 16}"
+      # PatchELF::Logger.info(
+      #   "first reserved offset/addr is 0x#{start_offset.to_i.to_s 16}/0x#{start_addr.to_i.to_s 16}")
 
       unless start_addr % page_size == start_offset % page_size
         raise PatchELF::PatchError, 'start_addr != start_offset (mod PAGE_SIZE)'
@@ -779,7 +815,13 @@ module PatchELF
         shdr = find_section(rsec_name).header
         orig_shdr = shdr.new(**shdr.snapshot) # hack! (probably) doesn't work for updating
 
-        # PatchELF::Logger.info "rewriting section '#{rsec_name}' from offset 0x#{shdr.sh_offset.to_i.to_s 16}(size #{shdr.sh_size}) to offset 0x#{cur_off.to_i.to_s 16}(size #{rsec_data.size})"
+        # dbg_msg = <<~INFO
+        #   rewriting section '#{rsec_name}' from offset
+        #   0x#{shdr.sh_offset.to_i.to_s 16}(size #{shdr.sh_size}) to offset
+        #   0x#{cur_off.to_i.to_s 16}(size #{rsec_data.size}
+        # INFO
+        # PatchELF::Logger.info(dbg_msg)
+
         with_buf_at(cur_off) { |b| b.write rsec_data }
 
         shdr.sh_offset = cur_off
