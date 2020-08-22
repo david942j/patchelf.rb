@@ -324,13 +324,11 @@ module PatchELF
 
       while curr_off < end_off
         note_sec = note_sections.find { |s| s.header.sh_offset == curr_off }
-        if note_sec.nil?
-          raise PatchELF::PatchError, 'cannot normalize PT_NOTE segment: non-contiguous SHT_NOTE sections'
-        end
+        raise PatchError, 'cannot normalize PT_NOTE segment: non-contiguous SHT_NOTE sections' if note_sec.nil?
 
         size = note_sec.header.sh_size
         if curr_off + size > end_off
-          raise PatchELF::PatchError, 'cannot normalize PT_NOTE segment: partially mapped SHT_NOTE section.'
+          raise PatchError, 'cannot normalize PT_NOTE segment: partially mapped SHT_NOTE section.'
         end
 
         # avoid shallow assignment by forcing .to_i
@@ -386,7 +384,7 @@ module PatchELF
       raise ArgumentError if old_shndx >= old_sections.count
 
       old_sec = old_sections[old_shndx]
-      raise PatchELF::PatchError, "old_sections[#{shndx}] is nil" if old_sec.nil?
+      raise PatchError, "old_sections[#{shndx}] is nil" if old_sec.nil?
 
       # TODO: handle case of non existing section in (new) @sections.
       find_section_idx(old_sec.name)
@@ -434,7 +432,7 @@ module PatchELF
     end
 
     def write_shdrs_to_buf!
-      raise PatchELF::PatchError, 'ehdr.e_shnum != @sections.count' if ehdr.e_shnum != @sections.count
+      raise PatchError, 'ehdr.e_shnum != @sections.count' if ehdr.e_shnum != @sections.count
 
       sort_shdrs!
       with_buf_at(ehdr.e_shoff) do |buf|
@@ -532,7 +530,7 @@ module PatchELF
       when ELFTools::Constants::ET_EXEC
         rewrite_sections_executable
       else
-        raise PatchELF::PatchError, 'unknown ELF type'
+        raise PatchError, 'unknown ELF type'
       end
     end
 
@@ -546,8 +544,8 @@ module PatchELF
           yield last_replaced
         end
       end
-      raise PatchELF::PatchError, 'last_replaced = 0' if last_replaced.zero?
-      raise PatchELF::PatchError, 'last_replaced + 1 >= @sections.size' if last_replaced + 1 >= @sections.size
+      raise PatchError, 'last_replaced = 0' if last_replaced.zero?
+      raise PatchError, 'last_replaced + 1 >= @sections.size' if last_replaced + 1 >= @sections.size
     end
 
     def start_replacement_shdr
@@ -598,7 +596,7 @@ module PatchELF
       Logger.debug "first reserved offset/addr is 0x#{start_offset.to_i.to_s 16}/0x#{start_addr.to_i.to_s 16}"
 
       unless start_addr % page_size == start_offset % page_size
-        raise PatchELF::PatchError, 'start_addr != start_offset (mod PAGE_SIZE)'
+        raise PatchError, 'start_addr != start_offset (mod PAGE_SIZE)'
       end
 
       Logger.debug "first page is 0x#{first_page.to_i.to_s 16}"
@@ -633,8 +631,7 @@ module PatchELF
       with_buf_at(cur_off) { |buf| buf.fill("\x00", (start_offset - cur_off)) }
 
       cur_off = write_replaced_sections cur_off, first_page, 0
-      # PatchELF::Logger.info " cur_off = #{cur_off} "
-      raise PatchELF::PatchError, 'cur_off != needed_space' if cur_off != needed_space
+      raise PatchError, "cur_off(#{cur_off}) != needed_space" if cur_off != needed_space
 
       rewrite_headers first_page + ehdr.e_phoff
     end
@@ -790,7 +787,7 @@ module PatchELF
         '.gnu.hash'
       when ELFTools::Constants::DT_JMPREL
         sec_name = %w[.rel.plt .rela.plt .rela.IA_64.pltoff].find { |s| find_section(s) }
-        raise PatchELF::PatchError, 'cannot find section corresponding to DT_JMPREL' unless sec_name
+        raise PatchError, 'cannot find section corresponding to DT_JMPREL' unless sec_name
 
         sec_name
       when ELFTools::Constants::DT_REL
@@ -862,7 +859,7 @@ module PatchELF
         seg_range = (phdr.p_offset.to_i)...(phdr.p_offset + phdr.p_filesz)
         next unless seg_range.cover?(sec_range.first) || seg_range.cover?(*sec_range.last(1))
 
-        raise PatchELF::PatchError, 'unsupported overlap of SHT_NOTE and PT_NOTE' if seg_range != sec_range
+        raise PatchError, 'unsupported overlap of SHT_NOTE and PT_NOTE' if seg_range != sec_range
 
         matching_idx = seg_idx
         break
