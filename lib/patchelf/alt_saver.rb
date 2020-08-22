@@ -9,6 +9,33 @@ require 'fileutils'
 require 'patchelf/helper'
 
 module PatchELF
+  # TODO: refactor buf_* methods here
+  # TODO: move all refinements into a seperate file / helper file.
+  # refinements for cleaner syntax / speed / memory optimizations
+  module Refinements
+    refine StringIO do
+      # behaves like C memset. Equivalent to calling stream.write(char * nbytes)
+      # the benefit of preferring this over `stream.write(char * nbytes)` is only when data to be written is large.
+      # @param [String] char
+      # @param [Integer] nbytes
+      # @return[void]
+      def fill(char, nbytes)
+        at_once = Helper::PAGE_SIZE
+        pending = nbytes
+
+        if pending > at_once
+          to_write = char * at_once
+          while pending >= at_once
+            write(to_write)
+            pending -= at_once
+          end
+        end
+        write(char * pending) if pending.positive?
+      end
+    end
+  end
+  using Refinements
+
   # Internal use only.
   # alternative to +Saver+, that aims to be byte to byte equivalent with NixOS/patchelf.
   #
@@ -132,7 +159,7 @@ module PatchELF
       @section_idx_by_name[sec_name]
     end
 
-    def grow_file(newsz)
+    def buf_grow!(newsz)
       bufsz = @buffer.size
       return if newsz <= bufsz
 
@@ -552,7 +579,7 @@ module PatchELF
       if ehdr.e_shoff < start_offset
         shoff_new = @buffer.size
         sh_size = ehdr.e_shoff + ehdr.e_shnum * ehdr.e_shentsize
-        grow_file @buffer.size + sh_size
+        buf_grow! @buffer.size + sh_size
         ehdr.e_shoff = shoff_new
         raise PatchELF::PatchError, 'ehdr.e_shnum != @sections.size' if ehdr.e_shnum != @sections.size
 
@@ -594,7 +621,8 @@ module PatchELF
       cur_off = ehdr.num_bytes + (@segments.count * seg_num_bytes)
       # PatchELF::Logger.info "clearing first #{start_offset - cur_off} bytes"
 
-      with_buf_at(cur_off) { |buf| buf.write "\x00" * (start_offset - cur_off) }
+      with_buf_at(cur_off) { |buf| buf.fill("\x00", (start_offset - cur_off)) }
+
       cur_off = write_replaced_sections cur_off, first_page, 0
       # PatchELF::Logger.info " cur_off = #{cur_off} "
       raise PatchELF::PatchError, 'cur_off != needed_space' if cur_off != needed_space
@@ -629,7 +657,7 @@ module PatchELF
       # PatchELF::Logger.info "needed space = #{needed_space}"
 
       start_offset = Helper.alignup(@buffer.size, page_size)
-      grow_file start_offset + needed_space
+      buf_grow! start_offset + needed_space
 
       # executable shared object
       if start_offset > start_page && @segments.any? { |seg| seg.header.p_type == ELFTools::Constants::PT_INTERP }
@@ -662,7 +690,7 @@ module PatchELF
     def shift_file(extra_pages, start_page)
       oldsz = @buffer.size
       shift = extra_pages * page_size
-      grow_file(oldsz + shift)
+      buf_grow!(oldsz + shift)
 
       buf_move! shift, 0, oldsz
       with_buf_at(ehdr.num_bytes) { |buf| buf.write "\x00" * (shift - ehdr.num_bytes) }
@@ -840,7 +868,7 @@ module PatchELF
       # prevent clobbering the previously written section contents.
       @replaced_sections.each do |rsec_name, _|
         shdr = find_section(rsec_name).header
-        with_buf_at(shdr.sh_offset) { |b| b.write('X' * shdr.sh_size) } if shdr.sh_type != sht_no_bits
+        with_buf_at(shdr.sh_offset) { |b| b.fill('X', shdr.sh_size) } if shdr.sh_type != sht_no_bits
       end
 
       noted_segments = Set.new
