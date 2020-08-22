@@ -77,6 +77,9 @@ module PatchELF
       # section name to its data mapping
       @replaced_sections = {}
       @section_alignment = ehdr.e_phoff.num_bytes
+
+      # using the same environment flag as patchelf, makes it easier for debugging
+      Logger.level = ::Logger.const_get(ENV['PATCHELF_DEBUG'] ? :DEBUG : :WARN)
     end
 
     # @return [void]
@@ -252,7 +255,7 @@ module PatchELF
         return
       end
 
-      # PatchELF::Logger.info 'rpath is too long, resizing...'
+      Logger.debug 'rpath is too long, resizing...'
       new_dynstr = replace_section '.dynstr', shdr_dynstr.sh_size + new_rpath.size + 1
       new_rpath_strtab_idx = shdr_dynstr.sh_size.to_i
       new_dynstr[new_rpath_strtab_idx..(new_rpath_strtab_idx + new_rpath.size)] = "#{new_rpath}\x00"
@@ -506,7 +509,7 @@ module PatchELF
             new_index = new_section_idx(old_shndx)
             next unless new_index
           rescue ArgumentError
-            PatchELF::Logger.warn "entry #{entry} in symbol table refers to a non existing section, skipping"
+            Logger.warn "entry #{entry} in symbol table refers to a non existing section, skipping"
           end
 
           sym[pack[:st_shndx]] = new_index
@@ -559,11 +562,9 @@ module PatchELF
           start_replacement_hdr = shdr
           break
         elsif @replaced_sections[sec.name].nil?
-          # PatchELF::Logger.info " replacing section #{sec.name} which is in the way"
-          # get blocking section out of the way
+          Logger.debug " replacing section #{sec.name} which is in the way"
           replace_section(sec.name, shdr.sh_size)
         end
-
         prev_sec_name = sec.name
       end
 
@@ -594,14 +595,13 @@ module PatchELF
       start_addr = shdr.sh_addr
       first_page = start_addr - start_offset
 
-      # PatchELF::Logger.info(
-      #   "first reserved offset/addr is 0x#{start_offset.to_i.to_s 16}/0x#{start_addr.to_i.to_s 16}")
+      Logger.debug "first reserved offset/addr is 0x#{start_offset.to_i.to_s 16}/0x#{start_addr.to_i.to_s 16}"
 
       unless start_addr % page_size == start_offset % page_size
         raise PatchELF::PatchError, 'start_addr != start_offset (mod PAGE_SIZE)'
       end
 
-      # PatchELF::Logger.info "first page is 0x#{first_page.to_i.to_s 16}"
+      Logger.debug "first page is 0x#{first_page.to_i.to_s 16}"
 
       copy_shdrs_to_eof if ehdr.e_shoff < start_offset
 
@@ -614,14 +614,11 @@ module PatchELF
         @replaced_sections.sum { |_, str| Helper.alignup(str.size, @section_alignment) }
       )
 
-      # PatchELF::Logger.info "needed space is #{needed_space}"
-
       if needed_space > start_offset
         needed_space += seg_num_bytes # new load segment is required
-        # PatchELF::Logger.info "needed space is #{needed_space}"
 
         needed_pages = Helper.alignup(needed_space - start_offset, page_size) / page_size
-        # PatchELF::Logger.info "needed pages is #{needed_pages}"
+        Logger.debug "needed pages is #{needed_pages}"
         raise PatchError, 'virtual address space underrun' if needed_pages * page_size > first_page
 
         first_page -= needed_pages * page_size
@@ -629,12 +626,10 @@ module PatchELF
 
         shift_file(needed_pages, first_page)
       end
-
-      # PatchELF::Logger.info "needed space is #{needed_space}"
+      Logger.debug "needed space is #{needed_space}"
 
       cur_off = ehdr.num_bytes + (@segments.count * seg_num_bytes)
-      # PatchELF::Logger.info "clearing first #{start_offset - cur_off} bytes"
-
+      Logger.debug "clearing first #{start_offset - cur_off} bytes"
       with_buf_at(cur_off) { |buf| buf.fill("\x00", (start_offset - cur_off)) }
 
       cur_off = write_replaced_sections cur_off, first_page, 0
@@ -666,19 +661,19 @@ module PatchELF
     def rewrite_sections_library
       start_page = seg_end_addr(@segments.max_by(&method(:seg_end_addr)))
 
-      # PatchELF::Logger.info "Last page is 0x#{start_page.to_s 16}"
+      Logger.debug "Last page is 0x#{start_page.to_s 16}"
       replace_sections_for_note_normalization!
       needed_space = @replaced_sections.sum { |_, str| Helper.alignup(str.size, @section_alignment) }
-      # PatchELF::Logger.info "needed space = #{needed_space}"
+      Logger.debug "needed space = #{needed_space}"
 
       start_offset = Helper.alignup(@buffer.size, page_size)
       buf_grow! start_offset + needed_space
 
       # executable shared object
       if start_offset > start_page && @segments.any? { |seg| seg.header.p_type == ELFTools::Constants::PT_INTERP }
-        #   PatchELF::Logger.info(
-        #     "shifting new PT_LOAD segment by #{start_offset - start_page} bytes to work around a Linux kernel bug"
-        #   )
+        Logger.debug(
+          "shifting new PT_LOAD segment by #{start_offset - start_page} bytes to work around a Linux kernel bug"
+        )
         start_page = start_offset
       end
 
@@ -706,7 +701,6 @@ module PatchELF
       oldsz = @buffer.size
       shift = extra_pages * page_size
       buf_grow!(oldsz + shift)
-
       buf_move! shift, 0, oldsz
       with_buf_at(ehdr.num_bytes) { |buf| buf.write "\x00" * (shift - ehdr.num_bytes) }
 
@@ -899,12 +893,11 @@ module PatchELF
           orig_sh_addralign = shdr.sh_addralign.to_i
         end
 
-        # dbg_msg = <<~INFO
-        #   rewriting section '#{rsec_name}' from offset
-        #   0x#{shdr.sh_offset.to_i.to_s 16}(size #{shdr.sh_size}) to offset
-        #   0x#{cur_off.to_i.to_s 16}(size #{rsec_data.size}
-        # INFO
-        # PatchELF::Logger.info(dbg_msg)
+        Logger.debug <<~DEBUG
+          rewriting section '#{rsec_name}'
+          from offset 0x#{shdr.sh_offset.to_i.to_s 16}(size #{shdr.sh_size})
+            to offset 0x#{cur_off.to_i.to_s 16}(size #{rsec_data.size})
+        DEBUG
 
         with_buf_at(cur_off) { |b| b.write rsec_data }
 
