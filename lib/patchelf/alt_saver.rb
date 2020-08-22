@@ -201,11 +201,10 @@ module PatchELF
           next
         end
 
-        tags[tag_type] = { offset: off }
         # clone does shallow copy, and for some reason d_tag and d_val can't be pass as argument
         dyn_rpath = ELFTools::Structs::ELF_Dyn.new(endian: endian, elf_class: elf_class)
         dyn_rpath.assign({ d_tag: dyn.d_tag.to_i, d_val: dyn.d_val.to_i })
-        tags[tag_type][:tag] = dyn_rpath
+        tags[tag_type] = { offset: off, header: dyn_rpath }
       end
       tags
     end
@@ -213,23 +212,20 @@ module PatchELF
     def resolve_rpath_tag_conflict(dyn_tags, force_rpath: false)
       dyn_runpath, dyn_rpath = dyn_tags.values_at(:runpath, :rpath)
 
-      if !force_rpath && dyn_rpath && dyn_runpath.nil?
-        dyn_tags[:runpath] = dyn_rpath
+      update_sym =
+        if !force_rpath && dyn_rpath && dyn_runpath.nil?
+          :runpath
+        elsif force_rpath && dyn_runpath
+          :rpath
+        end
+      return unless update_sym
 
-        dyn = dyn_rpath[:tag]
-        dyn.d_tag = ELFTools::Constants::DT_RUNPATH
-        with_buf_at(dyn_rpath[:offset]) { |buf| dyn.write(buf) }
-
-        dyn_tags.delete :rpath
-      elsif force_rpath && dyn_runpath
-        dyn_tags[:rpath] = dyn_runpath
-
-        dyn = dyn_runpath[:tag]
-        dyn.d_tag = ELFTools::Constants::DT_RPATH
-        with_buf_at(dyn_runpath[:offset]) { |buf| dyn.write(buf) }
-
-        dyn_tags.delete :runpath
-      end
+      delete_sym, = %i[rpath runpath] - [update_sym]
+      dyn_tag = dyn_tags[update_sym] = dyn_tags[delete_sym]
+      dyn = dyn_tag[:header]
+      dyn.d_tag = ELFTools::Constants.const_get("DT_#{update_sym.upcase}")
+      with_buf_at(dyn_tag[:offset]) { |buf| dyn.write(buf) }
+      dyn_tags.delete(delete_sym)
     end
 
     def modify_rpath_helper(new_rpath, force_rpath: false)
@@ -243,7 +239,7 @@ module PatchELF
       old_rpath = ''
       rpath_off = nil
       resolved_rpath_dyns.each do |dyn|
-        rpath_off = shdr_dynstr.sh_offset + dyn[:tag].d_val
+        rpath_off = shdr_dynstr.sh_offset + dyn[:header].d_val
         old_rpath = buf_cstr(rpath_off)
         break
       end
@@ -261,8 +257,8 @@ module PatchELF
       new_dynstr[new_rpath_strtab_idx..(new_rpath_strtab_idx + new_rpath.size)] = "#{new_rpath}\x00"
 
       dyn_tags.each do |_, dyn|
-        dyn[:tag].d_val = new_rpath_strtab_idx
-        with_buf_at(dyn[:offset]) { |b| dyn[:tag].write(b) }
+        dyn[:header].d_val = new_rpath_strtab_idx
+        with_buf_at(dyn[:offset]) { |b| dyn[:header].write(b) }
       end
 
       return unless dyn_tags.empty?
