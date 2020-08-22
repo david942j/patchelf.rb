@@ -8,6 +8,7 @@ require 'fileutils'
 
 require 'patchelf/helper'
 
+#:nodoc:
 module PatchELF
   # TODO: refactor buf_* methods here
   # TODO: move all refinements into a seperate file / helper file.
