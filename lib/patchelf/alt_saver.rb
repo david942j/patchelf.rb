@@ -532,30 +532,30 @@ module PatchELF
       end
     end
 
-    def rewrite_sections_executable
-      seg_num_bytes = @segments.first.header.num_bytes
-      sort_shdrs!
+    def replaced_section_indices
+      return enum_for(:replaced_section_indices) unless block_given?
 
       last_replaced = 0
-      @sections.each_with_index { |sec, idx| last_replaced = idx if @replaced_sections[sec.name] }
-
+      @sections.each_with_index do |sec, idx|
+        if @replaced_sections[sec.name]
+          last_replaced = idx
+          yield last_replaced
+        end
+      end
       raise PatchELF::PatchError, 'last_replaced = 0' if last_replaced.zero?
       raise PatchELF::PatchError, 'last_replaced + 1 >= @sections.size' if last_replaced + 1 >= @sections.size
+    end
 
-      # PatchELF::Logger.info "last replaced = #{last_replaced}"
-
+    def start_replacement_shdr
+      last_replaced = replaced_section_indices.max
       start_replacement_hdr = @sections[last_replaced + 1].header
-      start_offset = start_replacement_hdr.sh_offset
-      start_addr = start_replacement_hdr.sh_addr
 
       prev_sec_name = ''
       (1..last_replaced).each do |idx|
         sec = @sections[idx]
         shdr = sec.header
         if (sec.type == ELFTools::Constants::SHT_PROGBITS && sec.name != '.interp') || prev_sec_name == '.dynstr'
-          start_addr = shdr.sh_addr
-          start_offset = shdr.sh_offset
-          last_replaced = idx - 1
+          start_replacement_hdr = shdr
           break
         elsif @replaced_sections[sec.name].nil?
           # PatchELF::Logger.info " replacing section #{sec.name} which is in the way"
@@ -566,6 +566,33 @@ module PatchELF
         prev_sec_name = sec.name
       end
 
+      start_replacement_hdr
+    end
+
+    def copy_shdrs_to_eof
+      shoff_new = @buffer.size
+      # honestly idk why `ehdr.e_shoff` is considered when we are only moving shdrs.
+      sh_size = ehdr.e_shoff + ehdr.e_shnum * ehdr.e_shentsize
+      buf_grow! @buffer.size + sh_size
+      ehdr.e_shoff = shoff_new
+      raise PatchError, 'ehdr.e_shnum != @sections.size' if ehdr.e_shnum != @sections.size
+
+      with_buf_at(ehdr.e_shoff + @sections.first.header.num_bytes) do |buf| # skip writing to NULL section
+        @sections.each_with_index do |sec, idx|
+          next if idx.zero?
+
+          sec.header.write buf
+        end
+      end
+    end
+
+    def rewrite_sections_executable
+      sort_shdrs!
+      shdr = start_replacement_shdr
+      start_offset = shdr.sh_offset
+      start_addr = shdr.sh_addr
+      first_page = start_addr - start_offset
+
       # PatchELF::Logger.info(
       #   "first reserved offset/addr is 0x#{start_offset.to_i.to_s 16}/0x#{start_addr.to_i.to_s 16}")
 
@@ -573,27 +600,13 @@ module PatchELF
         raise PatchELF::PatchError, 'start_addr != start_offset (mod PAGE_SIZE)'
       end
 
-      first_page = start_addr - start_offset
       # PatchELF::Logger.info "first page is 0x#{first_page.to_i.to_s 16}"
 
-      if ehdr.e_shoff < start_offset
-        shoff_new = @buffer.size
-        sh_size = ehdr.e_shoff + ehdr.e_shnum * ehdr.e_shentsize
-        buf_grow! @buffer.size + sh_size
-        ehdr.e_shoff = shoff_new
-        raise PatchELF::PatchError, 'ehdr.e_shnum != @sections.size' if ehdr.e_shnum != @sections.size
-
-        with_buf_at(ehdr.e_shoff + @sections.first.header.num_bytes) do |buf| # skip writing to NULL section
-          @sections.each_with_index do |sec, idx|
-            next if idx.zero?
-
-            sec.header.write buf
-          end
-        end
-      end
+      copy_shdrs_to_eof if ehdr.e_shoff < start_offset
 
       normalize_note_segments!
 
+      seg_num_bytes = @segments.first.header.num_bytes
       needed_space = (
         ehdr.num_bytes +
         (@segments.count * seg_num_bytes) +
@@ -608,7 +621,7 @@ module PatchELF
 
         needed_pages = Helper.alignup(needed_space - start_offset, page_size) / page_size
         # PatchELF::Logger.info "needed pages is #{needed_pages}"
-        raise PatchELF::PatchError, 'virtual address space underrun' if needed_pages * page_size > first_page
+        raise PatchError, 'virtual address space underrun' if needed_pages * page_size > first_page
 
         first_page -= needed_pages * page_size
         start_offset += needed_pages * page_size
@@ -644,12 +657,13 @@ module PatchELF
       end
     end
 
-    def seg_end_addr(phdr)
+    def seg_end_addr(seg)
+      phdr = seg.header
       Helper.alignup(phdr.p_vaddr + phdr.p_memsz, page_size)
     end
 
     def rewrite_sections_library
-      start_page = seg_end_addr(@segments.max_by { |seg| seg_end_addr(seg.header) }.header)
+      start_page = seg_end_addr(@segments.max_by(&method(:seg_end_addr)))
 
       # PatchELF::Logger.info "Last page is 0x#{start_page.to_s 16}"
       replace_sections_for_note_normalization!
