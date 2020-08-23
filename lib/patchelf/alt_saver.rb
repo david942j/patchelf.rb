@@ -883,7 +883,7 @@ module PatchELF
 
         if shdr.sh_type == ELFTools::Constants::SHT_NOTE
           note_seg_idx = find_matching_note_segment_idx(shdr, skip_indices: noted_segments)
-          orig_sh_addralign = shdr.sh_addralign.to_i
+          min_sh_addralign = [shdr.sh_addralign.to_i, @section_alignment].min
         end
 
         Logger.debug <<~DEBUG
@@ -907,7 +907,7 @@ module PatchELF
         phdrs_by_type(seg_type) { |phdr| sync_sec_to_seg(shdr, phdr) }
 
         if shdr.sh_type == ELFTools::Constants::SHT_NOTE
-          shdr.sh_addralign = orig_sh_addralign if orig_sh_addralign < @section_alignment
+          shdr.sh_addralign = min_sh_addralign # if orig_sh_addralign < @section_alignment
           if note_seg_idx
             noted_segments.add(note_seg_idx)
             sync_sec_to_seg(shdr, @segments[note_seg_idx].header)
