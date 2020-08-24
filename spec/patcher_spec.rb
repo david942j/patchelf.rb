@@ -250,6 +250,14 @@ describe PatchELF::Patcher do
       patcher.remove_needed('added1')
       expect(patcher.needed).to eq %w[replaced added2]
     end
+
+    it 'patchelf_compatible: true' do
+      with_tempfile do |tmp|
+        patcher = get_patcher('pie.elf')
+        patcher.add_needed('juice')
+        expect { patcher.save(tmp, patchelf_compatible: true) }.to raise_error NotImplementedError
+      end
+    end
   end
 
   describe 'raises exception' do
