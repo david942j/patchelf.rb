@@ -63,6 +63,12 @@ describe PatchELF::Patcher do
         expect { patcher.save(f1) }.to raise_error NotImplementedError
         patcher.save(f1, patchelf_compatible: true)
         expect(described_class.new(f1).interpreter).to eq patcher.interpreter
+
+        new_runpath = "#{patcher.runpath}:no:no:no"
+        patcher.runpath = new_runpath
+        expect { patcher.save(f1) }.to raise_error NotImplementedError
+        patcher.save(f1, patchelf_compatible: true)
+        expect(described_class.new(f1).runpath).to eq new_runpath
       end
     end
   end
