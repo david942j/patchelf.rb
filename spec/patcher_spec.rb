@@ -55,6 +55,16 @@ describe PatchELF::Patcher do
         end
       end
     end
+
+    it 'patchelf_compatible: true ' do
+      patcher = get_patcher('pef-compat.elf')
+      patcher.interpreter = '/hippy/lib64/ld-2.30.sour'
+      with_tempfile do |f1|
+        expect { patcher.save(f1) }.to raise_error NotImplementedError
+        patcher.save(f1, patchelf_compatible: true)
+        expect(described_class.new(f1).interpreter).to eq patcher.interpreter
+      end
+    end
   end
 
   describe 'interpreter=' do
