@@ -143,7 +143,7 @@ module PatchELF
           break if dyn.d_tag == ELFTools::Constants::DT_NULL
 
           yield dyn, buf_dyn_offset
-          # safety :*
+          # there's a possibility for caller to modify @buffer.pos, seek to avoid such issues
           buf.seek buf_dyn_offset + dyn.num_bytes
         end
       end
