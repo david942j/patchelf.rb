@@ -103,10 +103,36 @@ describe PatchELF::Patcher do
       end
     end
 
-    context('patchelf_compatible: false') { it_behaves_like 'still executable after patching' }
+    context('patchelf_compatible: false') do
+      it_behaves_like 'still executable after patching'
+
+      it 'patches fine but segfaults on execution' do
+        patcher = get_patcher('syncthing')
+        # TODO: don't run this test on other arch.
+        patcher.interpreter = "/lib64/ld-linux-x86-64.so.2\x00"
+        patcher.rpath = patcher.rpath.gsub('@@HOMEBREW_PREFIX@@', '')
+        with_tempfile do |tmp|
+          patcher.save(tmp)
+          expect(`#{tmp} --version`).to eq ''
+          expect($CHILD_STATUS.termsig).to eq Signal.list['SEGV']
+        end
+      end
+    end
 
     context 'patchelf_compatible: true' do
       it_behaves_like 'still executable after patching', { patchelf_compatible: true }
+
+      it 'patches and runs fine' do
+        patcher = get_patcher('syncthing')
+        # TODO: don't run this test on other arch.
+        patcher.interpreter = "/lib64/ld-linux-x86-64.so.2\x00"
+        patcher.rpath = patcher.rpath.gsub('@@HOMEBREW_PREFIX@@', '')
+        with_tempfile do |tmp|
+          patcher.save(tmp, patchelf_compatible: true)
+          expect(`#{tmp} --version`).to include('syncthing v1.4.0 "Fermium Flea"')
+          expect($CHILD_STATUS.exitstatus).to eq 0
+        end
+      end
     end
   end
 
