@@ -846,8 +846,6 @@ module PatchELF
     end
 
     def find_matching_note_segment_idx(orig_shdr, skip_indices: nil)
-      matching_idx = nil
-
       phdrs_by_type(ELFTools::Constants::PT_NOTE) do |phdr, seg_idx|
         next if skip_indices.member?(seg_idx)
 
@@ -857,10 +855,8 @@ module PatchELF
 
         raise PatchError, 'unsupported overlap of SHT_NOTE and PT_NOTE' if seg_range != sec_range
 
-        matching_idx = seg_idx
-        break
+        return seg_idx
       end
-      matching_idx
     end
 
     def write_replaced_sections(cur_off, start_addr, start_offset)
