@@ -60,12 +60,14 @@ describe PatchELF::Patcher do
       patcher = get_patcher('pef-compat.elf')
       patcher.interpreter = '/hippy/lib64/ld-2.30.sour'
       with_tempfile do |f1|
+        # TODO: exception is thrown by new_load_method, update after new_load_method implementation
         expect { patcher.save(f1) }.to raise_error NotImplementedError
         patcher.save(f1, patchelf_compatible: true)
         expect(described_class.new(f1).interpreter).to eq patcher.interpreter
 
         new_runpath = "#{patcher.runpath}:no:no:no"
         patcher.runpath = new_runpath
+        # TODO: exception is thrown by new_load_method, update after new_load_method implementation
         expect { patcher.save(f1) }.to raise_error NotImplementedError
         patcher.save(f1, patchelf_compatible: true)
         expect(described_class.new(f1).runpath).to eq new_runpath
@@ -125,6 +127,7 @@ describe PatchELF::Patcher do
         with_tempfile do |tmp|
           patcher = get_patcher('libtest.so')
           patcher.soname = name
+          # TODO: update after implementing modify_soname in AltSaver
           expect { patcher.save(tmp, patchelf_compatible: true) }.to raise_error NotImplementedError
         end
       end
@@ -261,6 +264,7 @@ describe PatchELF::Patcher do
       with_tempfile do |tmp|
         patcher = get_patcher('pie.elf')
         patcher.add_needed('juice')
+        # TODO: update after implementing modify_needed in AltSaver
         expect { patcher.save(tmp, patchelf_compatible: true) }.to raise_error NotImplementedError
       end
     end
