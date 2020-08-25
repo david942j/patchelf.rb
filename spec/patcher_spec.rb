@@ -107,6 +107,8 @@ describe PatchELF::Patcher do
       it_behaves_like 'still executable after patching'
 
       it 'patches fine but segfaults on execution' do
+        linux_only!
+
         patcher = get_patcher('syncthing')
         # TODO: don't run this test on other arch.
         patcher.interpreter = "/lib64/ld-linux-x86-64.so.2\x00"
@@ -123,6 +125,8 @@ describe PatchELF::Patcher do
       it_behaves_like 'still executable after patching', { patchelf_compatible: true }
 
       it 'patches and runs fine' do
+        linux_only!
+
         patcher = get_patcher('syncthing')
         # TODO: don't run this test on other arch.
         patcher.interpreter = "/lib64/ld-linux-x86-64.so.2\x00"
