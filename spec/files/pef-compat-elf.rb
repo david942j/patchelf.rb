@@ -62,10 +62,9 @@ phdrs = [
   )
 ]
 
-
 def dyn_tag_as_str(d_tag: nil, d_val: nil)
- (dyn = ELFTools::Structs::ELF_Dyn.new(elf_class: 64, endian: :little)).assign(d_tag: d_tag, d_val: d_val)
- dyn.to_binary_s
+  (dyn = ELFTools::Structs::ELF_Dyn.new(elf_class: 64, endian: :little)).assign(d_tag: d_tag, d_val: d_val)
+  dyn.to_binary_s
 end
 
 def new_shdr(**vals)
@@ -78,16 +77,16 @@ section_data = [
   ['.shstrtab', "\x00.dynamic\x00.interp\x00.dynstr\x00.shstrtab\x00"],
   ['.dynstr', "\x00/tmp/p1:/tmp/p2:/tmp/p3\x00"],
   ['.interp', "/lib64/ld-2.30.so\x00"],
-  ['.dynamic',
-   # averwrite d_val for DT_STRTAB later, reserving for proper space calculation
-   # there is code below which depends on DT_STRTAB being at end.
-   dyn_tag_as_str(d_tag: DT_RUNPATH, d_val: 1) + dyn_tag_as_str(d_tag: DT_STRTAB, d_val: 0)
-  ],
+  [
+    '.dynamic',
+    # averwrite d_val for DT_STRTAB later, reserving for proper space calculation
+    # there is code below which depends on DT_STRTAB being at end.
+    dyn_tag_as_str(d_tag: DT_RUNPATH, d_val: 1) + dyn_tag_as_str(d_tag: DT_STRTAB, d_val: 0)
+  ]
 ].map do |(k, s)|
   aligned_len = alignup(s.size, section_alignment)
   [k, BinData::String.new(s, length: aligned_len)]
 end.to_h
-
 
 shstrtab = section_data['.shstrtab']
 
@@ -158,14 +157,13 @@ ehdr.e_shoff = section_data_off + section_data.values.sum(&:num_bytes)
 skip = 0
 shstrtab = section_data['.shstrtab']
 
-
 ordered_sec_data = []
 shdrs.each_with_index do |shdr, idx|
-  sec_name = BinData::Stringz.new(shstrtab[shdr.sh_name..])
+  sec_name = cstr(shstrtab, shdr.sh_name)
   sec_data = section_data[sec_name]
 
   # consider null section.ordered_data
-  ehdr.e_shstrndx = idx + 1 if sec_name == ".shstrtab"
+  ehdr.e_shstrndx = idx + 1 if sec_name == '.shstrtab'
 
   matching_phdr_type = {
     '.interp' => PT_INTERP,
@@ -175,7 +173,6 @@ shdrs.each_with_index do |shdr, idx|
   shdr.sh_addr = section_addr_off + skip
   shdr.sh_offset = section_data_off + skip
   shdr.sh_size = sec_data.num_bytes
-
 
   if matching_phdr_type
     phdrs.find { |phdr| phdr.p_type == matching_phdr_type }&.tap do |phdr|
@@ -187,7 +184,6 @@ shdrs.each_with_index do |shdr, idx|
   ordered_sec_data << sec_data
 end
 raise StandardError, 'section_addr_off + skip != ehdr.e_shoff' if ehdr.e_shoff != (section_data_off + skip)
-
 
 phdrs.find { |phdr| phdr.p_type == PT_LOAD }.tap do |phdr|
   phdr.p_offset = 0
