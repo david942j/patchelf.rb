@@ -361,7 +361,7 @@ module PatchELF
       sht_note = ELFTools::Constants::SHT_NOTE
       return if @replaced_sections.none? { |sec_name, _| find_section(sec_name).header.sh_type == sht_note }
 
-      note_sections = @sections.filter { |sec| sec.header.sh_type == sht_note }
+      note_sections = @sections.select { |sec| sec.header.sh_type == sht_note }
       # can't .each, new segments maybe be added as we iterate
       (1...@segments.count).each do |idx|
         phdr = @segments[idx].header
