@@ -857,6 +857,7 @@ module PatchELF
 
         return seg_idx
       end
+      nil
     end
 
     def write_replaced_sections(cur_off, start_addr, start_offset)
