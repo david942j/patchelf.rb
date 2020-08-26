@@ -313,62 +313,6 @@ module PatchELF
       new_dynamic_data[0...dyn_num_bytes] = zi.read
     end
 
-    def normalize_note_segment!(phdr, note_sections: [])
-      start_off = phdr.p_offset
-      curr_off = start_off
-      end_off = phdr.p_offset + phdr.p_filesz
-
-      while curr_off < end_off
-        note_sec = note_sections.find { |s| s.header.sh_offset == curr_off }
-        raise PatchError, 'cannot normalize PT_NOTE segment: non-contiguous SHT_NOTE sections' if note_sec.nil?
-
-        size = note_sec.header.sh_size
-        if curr_off + size > end_off
-          raise PatchError, 'cannot normalize PT_NOTE segment: partially mapped SHT_NOTE section.'
-        end
-
-        # avoid shallow assignment by forcing .to_i
-        #
-        # e.g on how shallow copying can go wrong
-        #   phdr.p_type = 4
-        #   x = phdr.p_type
-        #   phdr.assign({p_type: x})
-        # then if we expect (phdr.p_type == 4), guess what, we are wrong
-        # (phdr.p_type == 0) similarly x also equals 0, as they both refer to same object.
-        phdr_vals = {
-          p_type: phdr.p_type.to_i,
-          p_offset: curr_off.to_i,
-          p_vaddr: phdr.p_vaddr + (curr_off - start_off),
-          p_paddr: phdr.p_paddr + (curr_off - start_off),
-          p_filesz: size,
-          p_memsz: size,
-          p_flags: phdr.p_flags.to_i,
-          p_align: phdr.p_align.to_i
-        }
-
-        if curr_off == start_off
-          phdr.assign(phdr_vals)
-        else
-          add_segment!(**phdr_vals)
-        end
-
-        curr_off += size
-      end
-    end
-
-    def normalize_note_segments!
-      pt_note = ELFTools::Constants::PT_NOTE
-      sht_note = ELFTools::Constants::SHT_NOTE
-      return if @replaced_sections.none? { |sec_name, _| find_section(sec_name).header.sh_type == sht_note }
-
-      note_sections = @sections.select { |sec| sec.header.sh_type == sht_note }
-      # can't .each, new segments maybe be added as we iterate
-      (1...@segments.count).each do |idx|
-        phdr = @segments[idx].header
-        normalize_note_segment!(phdr, note_sections: note_sections) if phdr.p_type == pt_note
-      end
-    end
-
     # given a index into old_sections table
     # returns the corresponding section index in @sections
     #
@@ -599,8 +543,6 @@ module PatchELF
 
       copy_shdrs_to_eof if ehdr.e_shoff < start_offset
 
-      normalize_note_segments!
-
       seg_num_bytes = @segments.first.header.num_bytes
       needed_space = (
         ehdr.num_bytes +
@@ -632,9 +574,8 @@ module PatchELF
       rewrite_headers first_page + ehdr.e_phoff
     end
 
-    def replace_sections_for_note_normalization!
-      num_notes = @sections.count { |sec| sec.header.sh_type == ELFTools::Constants::SHT_NOTE }
-      pht_size = ehdr.num_bytes + (@segments.count + 1 + num_notes) * @segments.first.header.num_bytes
+    def replace_sections_in_the_way_of_phdr!
+      pht_size = ehdr.num_bytes + (@segments.count + 1) * @segments.first.header.num_bytes
 
       # replace sections that may overlap with expanded program header table
       @sections.each_with_index do |sec, idx|
@@ -655,7 +596,7 @@ module PatchELF
       start_page = seg_end_addr(@segments.max_by(&method(:seg_end_addr)))
 
       Logger.debug "Last page is 0x#{start_page.to_s 16}"
-      replace_sections_for_note_normalization!
+      replace_sections_in_the_way_of_phdr!
       needed_space = @replaced_sections.sum { |_, str| Helper.alignup(str.size, @section_alignment) }
       Logger.debug "needed space = #{needed_space}"
 
@@ -681,8 +622,6 @@ module PatchELF
         p_flags: ELFTools::Constants::PF_R | ELFTools::Constants::PF_W,
         p_align: page_size
       )
-
-      normalize_note_segments!
 
       cur_off = write_replaced_sections start_offset, start_page, start_offset
       raise PatchError, 'cur_off != start_offset + needed_space' if cur_off != start_offset + needed_space
@@ -845,21 +784,6 @@ module PatchELF
       end
     end
 
-    def find_matching_note_segment_idx(orig_shdr, skip_indices: nil)
-      phdrs_by_type(ELFTools::Constants::PT_NOTE) do |phdr, seg_idx|
-        next if skip_indices.member?(seg_idx)
-
-        sec_range = (orig_shdr.sh_offset.to_i)...(orig_shdr.sh_offset + orig_shdr.sh_size)
-        seg_range = (phdr.p_offset.to_i)...(phdr.p_offset + phdr.p_filesz)
-        next unless seg_range.cover?(sec_range.first) || seg_range.cover?(*sec_range.last(1))
-
-        raise PatchError, 'unsupported overlap of SHT_NOTE and PT_NOTE' if seg_range != sec_range
-
-        return seg_idx
-      end
-      nil
-    end
-
     def write_replaced_sections(cur_off, start_addr, start_offset)
       sht_no_bits = ELFTools::Constants::SHT_NOBITS
 
@@ -870,18 +794,12 @@ module PatchELF
         with_buf_at(shdr.sh_offset) { |b| b.fill('X', shdr.sh_size) } if shdr.sh_type != sht_no_bits
       end
 
-      noted_segments = Set.new
       # the sort is necessary, the strategy in ruby and Cpp to iterate map/hash
       # is different, patchelf v0.10 iterates the replaced_sections sorted by
       # keys.
       @replaced_sections.sort.each do |rsec_name, rsec_data|
         section = find_section(rsec_name)
         shdr = section.header
-
-        if shdr.sh_type == ELFTools::Constants::SHT_NOTE
-          note_seg_idx = find_matching_note_segment_idx(shdr, skip_indices: noted_segments)
-          min_sh_addralign = [shdr.sh_addralign.to_i, @section_alignment].min
-        end
 
         Logger.debug <<~DEBUG
           rewriting section '#{rsec_name}'
@@ -902,14 +820,6 @@ module PatchELF
         }[section.name]
 
         phdrs_by_type(seg_type) { |phdr| sync_sec_to_seg(shdr, phdr) }
-
-        if shdr.sh_type == ELFTools::Constants::SHT_NOTE
-          shdr.sh_addralign = min_sh_addralign # if orig_sh_addralign < @section_alignment
-          if note_seg_idx
-            noted_segments.add(note_seg_idx)
-            sync_sec_to_seg(shdr, @segments[note_seg_idx].header)
-          end
-        end
 
         cur_off += Helper.alignup(rsec_data.size, @section_alignment)
       end
