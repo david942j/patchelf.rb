@@ -55,6 +55,24 @@ describe PatchELF::Patcher do
         end
       end
     end
+
+    it 'patchelf_compatible: true ' do
+      patcher = get_patcher('pef-compat.elf')
+      patcher.interpreter = '/hippy/lib64/ld-2.30.sour'
+      with_tempfile do |f1|
+        # TODO: exception is thrown by new_load_method, update after new_load_method implementation
+        expect { patcher.save(f1) }.to raise_error NotImplementedError
+        patcher.save(f1, patchelf_compatible: true)
+        expect(described_class.new(f1).interpreter).to eq patcher.interpreter
+
+        new_runpath = "#{patcher.runpath}:no:no:no"
+        patcher.runpath = new_runpath
+        # TODO: exception is thrown by new_load_method, update after new_load_method implementation
+        expect { patcher.save(f1) }.to raise_error NotImplementedError
+        patcher.save(f1, patchelf_compatible: true)
+        expect(described_class.new(f1).runpath).to eq new_runpath
+      end
+    end
   end
 
   describe 'interpreter=' do
@@ -67,18 +85,56 @@ describe PatchELF::Patcher do
       expect { patcher.interpreter = 'a' }.to raise_error PatchELF::MissingSegmentError
     end
 
-    it 'still executable after patching' do
-      linux_only!
+    shared_examples 'still executable after patching' do |saver_args = {}|
+      it 'still executable after patching' do
+        linux_only!
 
-      %w[pie.elf nopie.elf].each do |f|
-        [0x100, 0xfff].each do |pad_len|
-          patcher = get_patcher(f)
-          patcher.interpreter = (patcher.interpreter + "\x00").ljust(pad_len, 'A')
-          with_tempfile do |tmp|
-            patcher.save(tmp)
-            expect(`#{tmp} < /dev/null`).to eq "It works!\n"
-            expect($CHILD_STATUS.exitstatus).to eq 217
+        %w[pie.elf nopie.elf].each do |f|
+          [0x100, 0xfff].each do |pad_len|
+            patcher = get_patcher(f)
+            patcher.interpreter = (patcher.interpreter + "\x00").ljust(pad_len, 'A')
+            with_tempfile do |tmp|
+              patcher.save(tmp, **saver_args)
+              expect(`#{tmp} < /dev/null`).to eq "It works!\n"
+              expect($CHILD_STATUS.exitstatus).to eq 217
+            end
           end
+        end
+      end
+    end
+
+    context('patchelf_compatible: false') do
+      it_behaves_like 'still executable after patching'
+
+      it 'patches fine but segfaults on execution' do
+        linux_only!
+
+        patcher = get_patcher('syncthing')
+        # TODO: don't run this test on other arch.
+        patcher.interpreter = "/lib64/ld-linux-x86-64.so.2\x00"
+        patcher.rpath = patcher.rpath.gsub('@@HOMEBREW_PREFIX@@', '')
+        with_tempfile do |tmp|
+          patcher.save(tmp)
+          expect(`#{tmp} --version`).to eq ''
+          expect($CHILD_STATUS.termsig).to eq Signal.list['SEGV']
+        end
+      end
+    end
+
+    context 'patchelf_compatible: true' do
+      it_behaves_like 'still executable after patching', { patchelf_compatible: true }
+
+      it 'patches and runs fine' do
+        linux_only!
+
+        patcher = get_patcher('syncthing')
+        # TODO: don't run this test on other arch.
+        patcher.interpreter = "/lib64/ld-linux-x86-64.so.2\x00"
+        patcher.rpath = patcher.rpath.gsub('@@HOMEBREW_PREFIX@@', '')
+        with_tempfile do |tmp|
+          patcher.save(tmp, patchelf_compatible: true)
+          expect(`#{tmp} --version`).to include('syncthing v1.4.0 "Fermium Flea"')
+          expect($CHILD_STATUS.exitstatus).to eq 0
         end
       end
     end
@@ -94,60 +150,130 @@ describe PatchELF::Patcher do
         expect(described_class.new(tmp).soname).to eq name
       end
     end
+
+    context 'patchelf_compatible: true' do
+      it 'normal' do
+        name = 'lwo'
+        with_tempfile do |tmp|
+          patcher = get_patcher('libtest.so')
+          patcher.soname = name
+          # TODO: update after implementing modify_soname in AltSaver
+          expect { patcher.save(tmp, patchelf_compatible: true) }.to raise_error NotImplementedError
+        end
+      end
+    end
   end
 
   describe 'runpath=' do
-    it 'runpath exist' do
-      patcher = get_patcher('runpath.elf')
-      patcher.runpath = 'XD'
-      with_tempfile do |tmp|
-        patcher.save(tmp)
-        expect(described_class.new(tmp).runpath).to eq 'XD'
+    shared_examples 'runpath=' do |saver_args = {}|
+      it 'runpath exist' do
+        patcher = get_patcher('runpath.elf')
+        patcher.runpath = 'XD'
+        with_tempfile do |tmp|
+          patcher.save(tmp, **saver_args)
+          expect(described_class.new(tmp).runpath).to eq 'XD'
+        end
       end
-    end
 
-    it 'runpath not exist' do
-      patcher = get_patcher('rpath.elf')
-      expect { hook_logger { patcher.runpath } }.to output(<<-EOS).to_stdout
+      it 'runpath not exist' do
+        patcher = get_patcher('rpath.elf')
+        expect { hook_logger { patcher.runpath } }.to output(<<-EOS).to_stdout
 [WARN] Entry DT_RUNPATH not found.
-      EOS
-      patcher.runpath = 'XD'
-      with_tempfile do |tmp|
-        patcher.save(tmp)
-        expect(described_class.new(tmp).runpath).to eq 'XD'
+        EOS
+        patcher.runpath = 'XD'
+        with_tempfile do |tmp|
+          patcher.save(tmp, **saver_args)
+          expect(described_class.new(tmp).runpath).to eq 'XD'
+        end
+      end
+
+      it 'with use_rpath' do
+        patcher = get_patcher('rpath.elf').use_rpath!
+        expect(patcher.runpath).to eq '/not_exists:/lib:/pusheen/is/fat'
+        patcher.runpath = 'XD'
+        with_tempfile do |tmp|
+          patcher.save(tmp, **saver_args)
+          expect(described_class.new(tmp).use_rpath!.runpath).to eq 'XD'
+        end
       end
     end
 
-    it 'with use_rpath' do
-      patcher = get_patcher('rpath.elf').use_rpath!
-      expect(patcher.runpath).to eq '/not_exists:/lib:/pusheen/is/fat'
-      patcher.runpath = 'XD'
-      with_tempfile do |tmp|
-        patcher.save(tmp)
-        expect(described_class.new(tmp).use_rpath!.runpath).to eq 'XD'
+    context 'patchelf_compatible: false' do
+      it_behaves_like 'runpath='
+    end
+
+    context 'patchelf_compatible: true' do
+      it_behaves_like 'runpath=', { patchelf_compatible: true }
+
+      it 'force converts DT_RPATH to DT_RUNPATH when DT_RUNPATH is missing' do
+        patcher = get_patcher('rpath.elf', on_error: :silent)
+        expect(patcher.runpath).to be_nil
+        patcher.runpath = 'XD'
+
+        with_tempfile do |tmp|
+          patcher.save(tmp, patchelf_compatible: true)
+          saved_patcher = described_class.new(tmp, on_error: :silent)
+          expect(saved_patcher.rpath).to be_nil
+          expect(saved_patcher.runpath).to eq 'XD'
+        end
+      end
+
+      it 'force converts DT_RPATH to DT_RUNPATH, even when old_rpath = new_rpath' do
+        patcher = get_patcher('rpath.elf', on_error: :silent)
+        expect(patcher.runpath).to be_nil
+        patcher.runpath = patcher.rpath
+
+        with_tempfile do |tmp|
+          patcher.save(tmp, patchelf_compatible: true)
+          saved_patcher = described_class.new(tmp, on_error: :silent)
+          expect(saved_patcher.rpath).to be_nil
+          expect(saved_patcher.runpath).to eq patcher.rpath
+        end
       end
     end
   end
 
   describe 'rpath=' do
-    it 'overwrites rpath' do
-      patcher = get_patcher('rpath.elf')
-      patcher.rpath = 'o O' # picking different sym to avoid confusion
-      with_tempfile do |tmp|
-        patcher.save tmp
-        expect(described_class.new(tmp).rpath).to eq 'o O'
+    shared_examples 'rpath=' do |saver_args = {}|
+      it 'overwrites rpath' do
+        patcher = get_patcher('rpath.elf')
+        patcher.rpath = 'o O' # picking different sym to avoid confusion
+        with_tempfile do |tmp|
+          patcher.save tmp, **saver_args
+          expect(described_class.new(tmp).rpath).to eq 'o O'
+        end
       end
     end
 
-    it 'writing to rpath leaves runpath untouched' do
-      patcher = get_patcher('runpath.elf')
-      patcher.rpath = 'o O'
-      with_tempfile do |tmp|
-        patcher.save tmp
+    context 'patchelf_compatible: false' do
+      it_behaves_like 'rpath='
 
-        saved_patcher = described_class.new(tmp)
-        expect(saved_patcher.runpath).to eq patcher.runpath
-        expect(saved_patcher.rpath).to eq 'o O'
+      it 'writing to rpath leaves runpath untouched' do
+        patcher = get_patcher('runpath.elf')
+        patcher.rpath = 'o O'
+        with_tempfile do |tmp|
+          patcher.save tmp
+
+          saved_patcher = described_class.new(tmp)
+          expect(saved_patcher.runpath).to eq patcher.runpath
+          expect(saved_patcher.rpath).to eq 'o O'
+        end
+      end
+    end
+
+    context 'patchelf_compatible: true' do
+      it_behaves_like 'rpath=', { patchelf_compatible: true }
+
+      it 'writing to rpath force deletes runpath' do
+        patcher = get_patcher('runpath.elf', on_error: :silent)
+        patcher.rpath = 'o O'
+        with_tempfile do |tmp|
+          patcher.save tmp, patchelf_compatible: true
+
+          saved_patcher = described_class.new(tmp, on_error: :silent)
+          expect(saved_patcher.runpath).to be_nil
+          expect(saved_patcher.rpath).to eq 'o O'
+        end
       end
     end
   end
@@ -162,6 +288,15 @@ describe PatchELF::Patcher do
       patcher.replace_needed('libstdc++.so.6', 'replaced')
       patcher.remove_needed('added1')
       expect(patcher.needed).to eq %w[replaced added2]
+    end
+
+    it 'patchelf_compatible: true' do
+      with_tempfile do |tmp|
+        patcher = get_patcher('pie.elf')
+        patcher.add_needed('juice')
+        # TODO: update after implementing modify_needed in AltSaver
+        expect { patcher.save(tmp, patchelf_compatible: true) }.to raise_error NotImplementedError
+      end
     end
   end
 
