@@ -25,7 +25,7 @@ libraries.
 
   s.required_ruby_version = '>= 2.3'
 
-  s.add_runtime_dependency 'elftools', '~> 1.1'
+  s.add_runtime_dependency 'elftools', '>= 1.1.3'
 
   s.add_development_dependency 'rake', '~> 13.0'
   s.add_development_dependency 'rspec', '~> 3.8'
