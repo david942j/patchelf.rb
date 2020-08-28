@@ -187,6 +187,17 @@ describe PatchELF::Patcher do
         end
       end
 
+      it 'runpath and rpath both not exist' do
+        patcher = get_patcher('nopie.elf', on_error: :silent)
+        expect(patcher.rpath).to be_nil
+        expect(patcher.runpath).to be_nil
+        patcher.runpath = 'XD'
+        with_tempfile do |tmp|
+          patcher.save(tmp, **saver_args)
+          expect(described_class.new(tmp).runpath).to eq 'XD'
+        end
+      end
+
       it 'with use_rpath' do
         patcher = get_patcher('rpath.elf').use_rpath!
         expect(patcher.runpath).to eq '/not_exists:/lib:/pusheen/is/fat'
@@ -240,6 +251,17 @@ describe PatchELF::Patcher do
         patcher.rpath = 'o O' # picking different sym to avoid confusion
         with_tempfile do |tmp|
           patcher.save tmp, **saver_args
+          expect(described_class.new(tmp).rpath).to eq 'o O'
+        end
+      end
+
+      it 'runpath and rpath both not exist' do
+        patcher = get_patcher('nopie.elf', on_error: :silent)
+        expect(patcher.rpath).to be_nil
+        expect(patcher.runpath).to be_nil
+        patcher.rpath = 'o O'
+        with_tempfile do |tmp|
+          patcher.save(tmp, **saver_args)
           expect(described_class.new(tmp).rpath).to eq 'o O'
         end
       end
