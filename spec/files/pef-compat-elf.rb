@@ -185,7 +185,6 @@ shdrs.each_with_index do |shdr, idx|
   skip += shdr.sh_size
   ordered_sec_data << sec_data
 end
-# raise StandardError, 'section_addr_off + skip != ehdr.e_shoff' if ehdr.e_shoff != (section_data_off + skip)
 
 phdrs.find { |phdr| phdr.p_type == PT_LOAD }.tap do |phdr|
   phdr.p_offset = 0
