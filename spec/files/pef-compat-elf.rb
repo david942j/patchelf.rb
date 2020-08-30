@@ -80,8 +80,10 @@ section_data = [
   [
     '.dynamic',
     # averwrite d_val for DT_STRTAB later, reserving for proper space calculation
-    # there is code below which depends on DT_STRTAB being at end.
-    dyn_tag_as_str(d_tag: DT_RUNPATH, d_val: 1) + dyn_tag_as_str(d_tag: DT_STRTAB, d_val: 0)
+    # there is code below which depends on DT_STRTAB being at index 0.
+    (dyn_tag_as_str(d_tag: DT_STRTAB, d_val: 0) +
+     dyn_tag_as_str(d_tag: DT_RUNPATH, d_val: 1) +
+     dyn_tag_as_str(d_tag: DT_NULL, d_val: 0))
   ]
 ].map do |(k, s)|
   aligned_len = alignup(s.size, section_alignment)
@@ -150,9 +152,9 @@ ehdr.assign(
   }
 )
 
-section_data_off = ehdr.num_bytes + (ehdr.e_phnum * ehdr.e_phentsize)
+ehdr.e_shoff = ehdr.num_bytes + (ehdr.e_phnum * ehdr.e_phentsize)
+section_data_off = ehdr.num_bytes + (ehdr.e_phnum * ehdr.e_phentsize) + (ehdr.e_shentsize * ehdr.e_shnum)
 section_addr_off = START_ADDR + section_data_off
-ehdr.e_shoff = section_data_off + section_data.values.sum(&:num_bytes)
 
 skip = 0
 shstrtab = section_data['.shstrtab']
@@ -162,7 +164,7 @@ shdrs.each_with_index do |shdr, idx|
   sec_name = cstr(shstrtab, shdr.sh_name)
   sec_data = section_data[sec_name]
 
-  # consider null section.ordered_data
+  # consider null section
   ehdr.e_shstrndx = idx + 1 if sec_name == '.shstrtab'
 
   matching_phdr_type = {
@@ -183,19 +185,18 @@ shdrs.each_with_index do |shdr, idx|
   skip += shdr.sh_size
   ordered_sec_data << sec_data
 end
-raise StandardError, 'section_addr_off + skip != ehdr.e_shoff' if ehdr.e_shoff != (section_data_off + skip)
 
 phdrs.find { |phdr| phdr.p_type == PT_LOAD }.tap do |phdr|
   phdr.p_offset = 0
   phdr.p_vaddr = phdr.p_paddr = START_ADDR
-  phdr.p_filesz = phdr.p_memsz = ehdr.e_shoff.to_i
+  phdr.p_filesz = phdr.p_memsz = section_data_off + ordered_sec_data.sum(&:length)
 end
 
 # NULL section header
 shdrs.unshift(BinData::String.new(length: shdrs.first.num_bytes))
 
 File.open(OUT_ELF, 'wb') do |f|
-  [ehdr, *phdrs, *ordered_sec_data, *shdrs].each do |p|
+  [ehdr, *phdrs, *shdrs, *ordered_sec_data].each do |p|
     p.write(f)
   end
 
@@ -204,8 +205,9 @@ File.open(OUT_ELF, 'wb') do |f|
   strtab_addr = shdrs.find { |s| cstr(shstrtab, s.sh_name) == '.dynstr' }.sh_addr
   dyn = dyn_tag_as_str(d_tag: DT_STRTAB, d_val: strtab_addr)
   dynamic = shdrs.find { |s| cstr(shstrtab, s.sh_name) == '.dynamic' }
-  f.seek(dynamic.sh_offset + dynamic.sh_size - dyn.size)
 
+  # DT_STRTAB is assume to be at index 0
+  f.seek(dynamic.sh_offset)
   f.write(dyn)
 end
 puts "Saved to #{OUT_ELF}"
