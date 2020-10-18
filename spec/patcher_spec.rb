@@ -92,7 +92,7 @@ describe PatchELF::Patcher do
         %w[pie.elf nopie.elf].each do |f|
           [0x100, 0xfff].each do |pad_len|
             patcher = get_patcher(f)
-            patcher.interpreter = (patcher.interpreter + "\x00").ljust(pad_len, 'A')
+            patcher.interpreter = "#{patcher.interpreter}\x00".ljust(pad_len, 'A')
             with_tempfile do |tmp|
               patcher.save(tmp, **saver_args)
               expect(`#{tmp} < /dev/null`).to eq "It works!\n"
@@ -324,9 +324,9 @@ describe PatchELF::Patcher do
 
   describe 'raises exception' do
     it 'missing segment' do
-      MissingSegmentError = PatchELF::MissingSegmentError
-      expect { get_patcher('libtest.so', on_error: :exception).interpreter }.to raise_error(MissingSegmentError)
-      expect { get_patcher('static.elf', on_error: :exception).needed }.to raise_error(MissingSegmentError)
+      error = PatchELF::MissingSegmentError
+      expect { get_patcher('libtest.so', on_error: :exception).interpreter }.to raise_error(error)
+      expect { get_patcher('static.elf', on_error: :exception).needed }.to raise_error(error)
     end
 
     it 'raises missing segment when queried for DT_tag' do

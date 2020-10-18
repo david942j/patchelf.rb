@@ -8,9 +8,12 @@ task :readme do
 
   readme = File.open('README.md', 'w')
 
+  # False positive, attr_reader cannot be used here.
+  # rubocop:disable Style/TrivialAccessors
   def patcher
     @patcher
   end
+  # rubocop:enable Style/TrivialAccessors
 
   def replace(prefix)
     @cur.gsub!(/#{prefix}\(.*\)/) do |s|
@@ -21,10 +24,11 @@ task :readme do
   File.readlines('README.tpl.md').each do |line|
     @cur = line
     replace('SHELL_OUTPUT_OF') do |cmd|
-      '$ ' + cmd + "\n" + `#{cmd}`.lines.map do |c|
+      out = "$ #{cmd}\n"
+      out + `#{cmd}`.lines.map do |c|
         next "#\n" if c.strip.empty?
 
-        '# ' + c
+        "# #{c}"
       end.join
     end
 
@@ -41,7 +45,7 @@ task :readme do
 
     replace('RUBY_OUTPUT_OF') do |cmd|
       res = instance_eval(cmd)
-      cmd + "\n" + '#=> ' + res.inspect + "\n"
+      "#{cmd}\n#=> #{res.inspect}\n"
     end
 
     replace('RUBY_EVAL') do |cmd|

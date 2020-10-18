@@ -171,7 +171,7 @@ module PatchELF
     end
 
     def modify_interpreter
-      @replaced_sections['.interp'] = @set[:interpreter] + "\x00"
+      @replaced_sections['.interp'] = "#{@set[:interpreter]}\x00"
     end
 
     def modify_needed
@@ -234,14 +234,13 @@ module PatchELF
       dyn_tags = collect_runpath_tags
       resolve_rpath_tag_conflict(dyn_tags, force_rpath: force_rpath)
       # (:runpath, :rpath) order_matters.
-      resolved_rpath_dyns = dyn_tags.values_at(:runpath, :rpath).compact
+      resolved_rpath_dyn = dyn_tags.values_at(:runpath, :rpath).compact.first
 
       old_rpath = ''
       rpath_off = nil
-      resolved_rpath_dyns.each do |dyn|
-        rpath_off = shdr_dynstr.sh_offset + dyn[:header].d_val
+      if resolved_rpath_dyn
+        rpath_off = shdr_dynstr.sh_offset + resolved_rpath_dyn[:header].d_val
         old_rpath = buf_cstr(rpath_off)
-        break
       end
       return if old_rpath == new_rpath
 
@@ -359,7 +358,7 @@ module PatchELF
                  elsif data.size < size
                    data.ljust(size, "\x00")
                  else
-                   data[0...size] + "\x00"
+                   "#{data[0...size]}\x00"
                  end
       @replaced_sections[section_name] = rep_data
     end

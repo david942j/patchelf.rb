@@ -10,7 +10,7 @@ describe PatchELF::Saver do
         described_class.new(bin_path(file), filename, interpreter: str).save!
         expect(PatchELF::Patcher.new(filename).interpreter).to eq str
         File.open(filename) do |f|
-          expect(ELFTools::ELFFile.new(f).section_by_name('.interp').data).to eq str + "\x00"
+          expect(ELFTools::ELFFile.new(f).section_by_name('.interp').data).to eq "#{str}\x00"
         end
       end
 
