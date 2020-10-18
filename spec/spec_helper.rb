@@ -31,7 +31,7 @@ module Helpers
   end
 
   def with_tempfile
-    filename = File.join(Dir.tmpdir, 'patchelf-' + SecureRandom.hex(8))
+    filename = File.join(Dir.tmpdir, "patchelf-#{SecureRandom.hex(8)}")
     yield filename
   ensure
     FileUtils.rm_f(filename)
