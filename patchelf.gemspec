@@ -30,7 +30,8 @@ libraries.
   s.add_development_dependency 'rake', '~> 13.0'
   s.add_development_dependency 'rspec', '~> 3.8'
   s.add_development_dependency 'rubocop', '~> 0.62'
-  s.add_development_dependency 'simplecov', '~> 0.17'
+  # https://github.com/codeclimate/test-reporter/issues/413
+  s.add_development_dependency 'simplecov', '~> 0.17', '< 0.18'
   s.add_development_dependency 'tty-platform', '~> 0.1'
   s.add_development_dependency 'yard', '~> 0.9'
 end
