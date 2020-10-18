@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/david942j/patchelf.rb.svg?branch=master)](https://travis-ci.org/david942j/patchelf.rb)
+[![Build Status](https://travis-ci.com/david942j/patchelf.rb.svg?branch=master)](https://travis-ci.com/david942j/patchelf.rb)
 [![Dependabot Status](https://api.dependabot.com/badges/status?host=github&repo=david942j/patchelf.rb)](https://dependabot.com)
 [![Code Climate](https://codeclimate.com/github/david942j/patchelf.rb/badges/gpa.svg)](https://codeclimate.com/github/david942j/patchelf.rb)
 [![Issue Count](https://codeclimate.com/github/david942j/patchelf.rb/badges/issue_count.svg)](https://codeclimate.com/github/david942j/patchelf.rb)
