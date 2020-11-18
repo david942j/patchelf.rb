@@ -11,7 +11,7 @@ require 'patchelf/helper'
 #:nodoc:
 module PatchELF
   # TODO: refactor buf_* methods here
-  # TODO: move all refinements into a seperate file / helper file.
+  # TODO: move all refinements into a separate file / helper file.
   # refinements for cleaner syntax / speed / memory optimizations
   module Refinements
     refine StringIO do
@@ -786,7 +786,7 @@ module PatchELF
     def write_replaced_sections(cur_off, start_addr, start_offset)
       sht_no_bits = ELFTools::Constants::SHT_NOBITS
 
-      # the original source says this has to be done seperately to
+      # the original source says this has to be done separately to
       # prevent clobbering the previously written section contents.
       @replaced_sections.each do |rsec_name, _|
         shdr = find_section(rsec_name).header
