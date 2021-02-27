@@ -698,6 +698,8 @@ module PatchELF
     end
 
     def sort_shdrs!
+      return if @sections.empty?
+
       section_dep_values = collect_section_to_section_refs
       shstrtab_name = @sections[ehdr.e_shstrndx].name
       @sections.sort! { |me, you| me.header.sh_offset.to_i <=> you.header.sh_offset.to_i }
@@ -783,13 +785,20 @@ module PatchELF
       end
     end
 
+    # To be used when the section header does not exist.
+    def dummy_shdr
+      ELFTools::Structs::ELF_Shdr.new(endian: endian, elf_class: elf_class)
+    end
+
     def write_replaced_sections(cur_off, start_addr, start_offset)
       sht_no_bits = ELFTools::Constants::SHT_NOBITS
 
       # the original source says this has to be done separately to
       # prevent clobbering the previously written section contents.
       @replaced_sections.each do |rsec_name, _|
-        shdr = find_section(rsec_name).header
+        shdr = find_section(rsec_name)&.header
+        next unless shdr
+
         with_buf_at(shdr.sh_offset) { |b| b.fill('X', shdr.sh_size) } if shdr.sh_type != sht_no_bits
       end
 
@@ -797,8 +806,8 @@ module PatchELF
       # is different, patchelf v0.10 iterates the replaced_sections sorted by
       # keys.
       @replaced_sections.sort.each do |rsec_name, rsec_data|
-        section = find_section(rsec_name)
-        shdr = section.header
+        shdr = find_section(rsec_name)&.header
+        shdr ||= dummy_shdr
 
         Logger.debug <<~DEBUG
           rewriting section '#{rsec_name}'
@@ -816,7 +825,7 @@ module PatchELF
         seg_type = {
           '.interp' => ELFTools::Constants::PT_INTERP,
           '.dynamic' => ELFTools::Constants::PT_DYNAMIC
-        }[section.name]
+        }[rsec_name]
 
         phdrs_by_type(seg_type) { |phdr| sync_sec_to_seg(shdr, phdr) }
 
