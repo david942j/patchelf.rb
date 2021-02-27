@@ -115,7 +115,7 @@ module PatchELF
       # prefer backward than forward
       return extend_backward(loads[idx - 1]) if writable?(loads[idx - 1])
 
-      # note: loads[idx].file_head has been changed in shift_attributes
+      # NOTE: loads[idx].file_head has been changed in shift_attributes
       extend_forward(loads[idx], @extend_size)
     end
 
