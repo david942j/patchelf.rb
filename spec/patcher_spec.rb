@@ -300,6 +300,27 @@ describe PatchELF::Patcher do
     end
   end
 
+  describe 'nosection' do
+    shared_examples 'patching with no section' do |saver_args = {}|
+      it 'set interp' do
+        patcher = get_patcher('nosection.elf')
+        patcher.interpreter = 'ppp'
+        with_tempfile do |tmp|
+          patcher.save(tmp, **saver_args)
+          expect(described_class.new(tmp).interpreter).to eq 'ppp'
+        end
+      end
+    end
+
+    context 'patchelf_compatible: false' do
+      it_behaves_like 'patching with no section'
+    end
+
+    context 'patchelf_compatible: true' do
+      it_behaves_like 'patching with no section', { patchelf_compatible: true }
+    end
+  end
+
   describe 'needed' do
     it 'combo' do
       patcher = get_patcher('pie.elf')
