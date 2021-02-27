@@ -35,6 +35,7 @@ describe PatchELF::MM do
     allow(elf).to receive(:header).and_return ehdr
 
     mm = described_class.new(elf)
+    block ||= ->(_, _) {}
     mm.malloc(request_size, &block)
     mm.dispatch!
   end
@@ -99,7 +100,7 @@ describe PatchELF::MM do
 
       # We should be able to extend it again!
       # This time the fgap should be used
-      test_dispatch(0x200, loads) {}
+      test_dispatch(0x200, loads)
       expect(loads[0].file_tail).to be 0xa66
       expect(loads[1].file_head).to be 0x1668
     end
