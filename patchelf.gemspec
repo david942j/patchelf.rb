@@ -28,7 +28,7 @@ libraries.
   s.add_development_dependency 'rspec', '~> 3'
   s.add_development_dependency 'rubocop', '~> 1'
   # https://github.com/codeclimate/test-reporter/issues/413
-  s.add_development_dependency 'simplecov', '~> 0.17', '< 0.18'
+  s.add_development_dependency 'simplecov', '~> 0.17', '< 0.22'
   s.add_development_dependency 'tty-platform', '~> 0.1'
   s.add_development_dependency 'yard', '~> 0.9'
   s.metadata['rubygems_mfa_required'] = 'true'
