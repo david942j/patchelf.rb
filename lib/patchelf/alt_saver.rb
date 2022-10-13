@@ -8,7 +8,7 @@ require 'fileutils'
 
 require 'patchelf/helper'
 
-#:nodoc:
+# :nodoc:
 module PatchELF
   # TODO: refactor buf_* methods here
   # TODO: move all refinements into a separate file / helper file.
@@ -511,7 +511,7 @@ module PatchELF
     def copy_shdrs_to_eof
       shoff_new = @buffer.size
       # honestly idk why `ehdr.e_shoff` is considered when we are only moving shdrs.
-      sh_size = ehdr.e_shoff + ehdr.e_shnum * ehdr.e_shentsize
+      sh_size = ehdr.e_shoff + (ehdr.e_shnum * ehdr.e_shentsize)
       buf_grow! @buffer.size + sh_size
       ehdr.e_shoff = shoff_new
       raise PatchError, 'ehdr.e_shnum != @sections.size' if ehdr.e_shnum != @sections.size
@@ -574,7 +574,7 @@ module PatchELF
     end
 
     def replace_sections_in_the_way_of_phdr!
-      pht_size = ehdr.num_bytes + (@segments.count + 1) * @segments.first.header.num_bytes
+      pht_size = ehdr.num_bytes + ((@segments.count + 1) * @segments.first.header.num_bytes)
 
       # replace sections that may overlap with expanded program header table
       @sections.each_with_index do |sec, idx|

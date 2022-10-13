@@ -85,10 +85,10 @@ section_data = [
      dyn_tag_as_str(d_tag: DT_RUNPATH, d_val: 1) +
      dyn_tag_as_str(d_tag: DT_NULL, d_val: 0))
   ]
-].map do |(k, s)|
+].to_h do |(k, s)|
   aligned_len = alignup(s.size, section_alignment)
   [k, BinData::String.new(s, length: aligned_len)]
-end.to_h
+end
 
 shstrtab = section_data['.shstrtab']
 

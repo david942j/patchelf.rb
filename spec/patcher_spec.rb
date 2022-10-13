@@ -51,7 +51,7 @@ describe PatchELF::Patcher do
         with_tempfile do |f2|
           patcher.save(f1)
           patcher.save(f2)
-          expect(Digest::MD5.digest(IO.binread(f1))).to eq Digest::MD5.digest(IO.binread(f2))
+          expect(Digest::MD5.digest(File.binread(f1))).to eq Digest::MD5.digest(File.binread(f2))
         end
       end
     end

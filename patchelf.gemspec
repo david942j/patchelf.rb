@@ -20,7 +20,7 @@ libraries.
   s.homepage      = 'https://github.com/david942j/patchelf.rb'
   s.executables   = ['patchelf.rb']
 
-  s.required_ruby_version = '>= 2.4'
+  s.required_ruby_version = '>= 2.6'
 
   s.add_runtime_dependency 'elftools', '>= 1.1.3'
 
@@ -31,4 +31,5 @@ libraries.
   s.add_development_dependency 'simplecov', '~> 0.17', '< 0.18'
   s.add_development_dependency 'tty-platform', '~> 0.1'
   s.add_development_dependency 'yard', '~> 0.9'
+  s.metadata['rubygems_mfa_required'] = 'true'
 end
