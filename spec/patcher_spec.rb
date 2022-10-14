@@ -137,6 +137,22 @@ describe PatchELF::Patcher do
           expect($CHILD_STATUS.exitstatus).to eq 0
         end
       end
+
+      it 'does not error on contiguous note sections' do
+        patcher = get_patcher('contiguous-note-sections.elf')
+        patcher.interpreter = '/lib64/ld-linux-x86-64.so.2'
+        with_tempfile do |tmp|
+          expect { patcher.save(tmp, patchelf_compatible: true) }.not_to raise_error
+        end
+      end
+
+      it 'does not error on blank note segments' do
+        patcher = get_patcher('empty-note')
+        patcher.interpreter = '/lib64/ld-linux-x86-64.so.2'
+        with_tempfile do |tmp|
+          expect { patcher.save(tmp, patchelf_compatible: true) }.not_to raise_error
+        end
+      end
     end
   end
 
@@ -295,6 +311,50 @@ describe PatchELF::Patcher do
           saved_patcher = described_class.new(tmp, on_error: :silent)
           expect(saved_patcher.runpath).to be_nil
           expect(saved_patcher.rpath).to eq 'o O'
+        end
+      end
+
+      it 'can patch note segments correctly' do
+        patcher = get_patcher('libbuildid.so')
+
+        rpath = 'A' * 10_000
+        patcher.rpath = rpath
+
+        def note_section_in_segment_count(patcher)
+          patcher.elf.segments_by_type(:NOTE).sum do |seg|
+            phdr = seg.header
+            patcher.elf.sections_by_type(:NOTE).count do |sec|
+              shdr = sec.header
+              shdr.sh_offset >= phdr.p_offset && shdr.sh_offset + shdr.sh_size <= phdr.p_offset + phdr.p_filesz
+            end
+          end
+        end
+
+        prev_note_count = note_section_in_segment_count(patcher)
+
+        with_tempfile do |tmp|
+          patcher.save tmp, patchelf_compatible: true
+
+          saved_patcher = described_class.new(tmp, on_error: :silent)
+          expect(saved_patcher.runpath).to be_nil
+          expect(saved_patcher.rpath).to eq rpath
+          expect(note_section_in_segment_count(saved_patcher)).to eq prev_note_count
+        end
+      end
+
+      it 'will not raise a Ruby error on executables without a dynamic section' do
+        patcher = get_patcher('libbig-dynstr.debug', on_error: :silent)
+        expect(patcher.runpath).to be_nil
+        expect(patcher.rpath).to be_nil
+
+        patcher.rpath = 'ABC'
+        with_tempfile do |tmp|
+          expect(PatchELF::Logger).to receive(:error).with('no dynamic tags')
+          patcher.save tmp, patchelf_compatible: true
+
+          saved_patcher = described_class.new(tmp, on_error: :silent)
+          expect(saved_patcher.runpath).to be_nil
+          expect(saved_patcher.rpath).to be_nil
         end
       end
     end
