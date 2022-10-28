@@ -10,6 +10,8 @@ all: $(SRC)
 	$(GCC) $< -Wl,--enable-new-dtags -Wl,-rpath=/not_exists:/lib:/pusheen/is/fat -o runpath.elf
 	$(GCC) $< -fPIE -pie -m32 -o pie32.elf
 	$(GCC) $< -fPIE -pie -o nosection.elf && ./patch.rb
+	$(GCC) $< -shared -fPIC -Wl,--disable-new-dtags -Wl,--build-id -o libbuildid.so
+	$(GCC) contiguous-note-sections.s -shared -pie -nostdlib -T contiguous-note-sections.ld -o contiguous-note-sections.elf
 
 clean:
 	$(RM) *.elf *.so
