@@ -9,7 +9,7 @@ include ELFTools::Constants
 include ELFTools::Structs
 
 PAGE_SIZE = 4096
-START_ADDR = 0x4000 # choosen without any reason
+START_ADDR = 0x4000 # chosen without any reason
 Phdr = ELF64_Phdr
 Shdr = ELF_Shdr
 section_alignment = 8
