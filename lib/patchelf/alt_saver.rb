@@ -177,7 +177,7 @@ module PatchELF
     end
 
     def modify_needed
-      # due to gsoc time constraints only implmenting features used by brew.
+      # due to gsoc time constraints only implementing features used by brew.
       raise NotImplementedError
     end
 
@@ -273,7 +273,7 @@ module PatchELF
     def modify_soname
       return unless ehdr.e_type == ELFTools::Constants::ET_DYN
 
-      # due to gsoc time constraints only implmenting features used by brew.
+      # due to gsoc time constraints only implementing features used by brew.
       raise NotImplementedError
     end
 
@@ -306,7 +306,7 @@ module PatchELF
       # consider DT_NULL when copying
       replacement_size = (dt_null_idx + 1) * dyn_num_bytes
 
-      # make space for dt_runpath tag at the top, shift data by one tag positon
+      # make space for dt_runpath tag at the top, shift data by one tag position
       new_dynamic_data[dyn_num_bytes..(replacement_size + dyn_num_bytes)] = new_dynamic_data[0..replacement_size]
 
       dyn_rpath = ELFTools::Structs::ELF_Dyn.new endian: endian, elf_class: elf_class
@@ -976,7 +976,7 @@ module PatchELF
       end
     end
 
-    def write_section_aligment(shdr)
+    def write_section_alignment(shdr)
       return if shdr.sh_type == ELFTools::Constants::SHT_NOTE && shdr.sh_addralign <= @section_alignment
 
       shdr.sh_addralign = @section_alignment
@@ -1012,7 +1012,7 @@ module PatchELF
         shdr.sh_addr = start_addr + (cur_off - start_offset)
         shdr.sh_size = rsec_data.size
 
-        write_section_aligment(shdr)
+        write_section_alignment(shdr)
 
         seg_type = {
           '.interp' => ELFTools::Constants::PT_INTERP,
