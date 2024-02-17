@@ -7,7 +7,7 @@ require 'patchelf/version'
 
 Gem::Specification.new do |s|
   s.name          = 'patchelf'
-  s.version       = ::PatchELF::VERSION
+  s.version       = PatchELF::VERSION
   s.summary       = 'patchelf'
   s.description   = <<-EOS
   A simple utility for modifying existing ELF executables and
@@ -20,9 +20,9 @@ libraries.
   s.homepage      = 'https://github.com/david942j/patchelf.rb'
   s.executables   = ['patchelf.rb']
 
-  s.required_ruby_version = '>= 2.6'
+  s.required_ruby_version = '>= 3.1'
 
-  s.add_runtime_dependency 'elftools', '>= 1.2'
+  s.add_runtime_dependency 'elftools', '>= 1.3'
 
   s.add_development_dependency 'rake', '~> 13.0'
   s.add_development_dependency 'rspec', '~> 3'
