@@ -257,7 +257,7 @@ module PatchELF
       new_rpath_strtab_idx = shdr_dynstr.sh_size.to_i
       new_dynstr[new_rpath_strtab_idx..(new_rpath_strtab_idx + new_rpath.size)] = "#{new_rpath}\x00"
 
-      dyn_tags.each do |_, dyn|
+      dyn_tags.each_value do |dyn|
         dyn[:header].d_val = new_rpath_strtab_idx
         with_buf_at(dyn[:offset]) { |b| dyn[:header].write(b) }
       end
@@ -966,7 +966,7 @@ module PatchELF
     def overwrite_replaced_sections
       # the original source says this has to be done separately to
       # prevent clobbering the previously written section contents.
-      @replaced_sections.each do |rsec_name, _|
+      @replaced_sections.each_key do |rsec_name|
         shdr = find_section(rsec_name)&.header
         next unless shdr
 
