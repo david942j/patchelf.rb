@@ -451,10 +451,10 @@ module PatchELF
 
           begin
             new_index = new_section_idx(old_shndx)
-            next unless new_index
           rescue ArgumentError
             Logger.warn "entry #{entry} in symbol table refers to a non existing section, skipping"
           end
+          next unless new_index
 
           sym[pack[:st_shndx]] = new_index
 
