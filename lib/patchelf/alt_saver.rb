@@ -5,6 +5,7 @@ require 'elftools/elf_file'
 require 'elftools/structs'
 require 'elftools/util'
 require 'fileutils'
+require 'objspace'
 
 require 'patchelf/helper'
 
@@ -65,6 +66,9 @@ module PatchELF
       @elf = ELFTools::ELFFile.new(f)
       @buffer = StringIO.new(f.tap(&:rewind).read) # StringIO makes easier to work with Bindata
 
+      # Ensure file is closed when the {AltSaver} object is garbage collected.
+      ObjectSpace.define_finalizer(self, self.class.close_file(f))
+
       @ehdr = @elf.header
       @endian = @elf.endian
       @elf_class = @elf.elf_class
@@ -96,6 +100,10 @@ module PatchELF
     private
 
     attr_reader :ehdr, :endian, :elf_class
+
+    def self.close_file(file)
+      proc { file.close if file && !file.closed? }
+    end
 
     def old_sections
       @old_sections ||= @elf.sections
