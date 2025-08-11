@@ -67,7 +67,7 @@ module PatchELF
       @buffer = StringIO.new(f.tap(&:rewind).read) # StringIO makes easier to work with Bindata
 
       # Ensure file is closed when the {AltSaver} object is garbage collected.
-      ObjectSpace.define_finalizer(self, self.class.close_file(f))
+      ObjectSpace.define_finalizer(self, Helper.close_file_proc(f))
 
       @ehdr = @elf.header
       @endian = @elf.endian
@@ -100,10 +100,6 @@ module PatchELF
     private
 
     attr_reader :ehdr, :endian, :elf_class
-
-    def self.close_file(file)
-      proc { file.close if file && !file.closed? }
-    end
 
     def old_sections
       @old_sections ||= @elf.sections

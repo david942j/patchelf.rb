@@ -5,6 +5,7 @@ require 'elftools/elf_file'
 require 'objspace'
 
 require 'patchelf/exceptions'
+require 'patchelf/helper'
 require 'patchelf/logger'
 require 'patchelf/saver'
 
@@ -38,7 +39,7 @@ module PatchELF
       raise ArgumentError, "on_error must be one of #{on_error_syms}" unless on_error_syms.include?(@on_error)
 
       # Ensure file is closed when the {Patcher} object is garbage collected.
-      ObjectSpace.define_finalizer(self, self.class.close_file(f))
+      ObjectSpace.define_finalizer(self, Helper.close_file_proc(f))
     end
 
     # @return [String?]
@@ -197,10 +198,6 @@ module PatchELF
     end
 
     private
-
-    def self.close_file(file)
-      proc { file.close if file && !file.closed? }
-    end
 
     def log_or_raise(msg, exception = PatchELF::PatchError)
       raise exception, msg if @on_error == :exception

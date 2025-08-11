@@ -80,5 +80,12 @@ module PatchELF
     def alignup(val, align = page_size)
       (val & (align - 1)).zero? ? val : (aligndown(val, align) + align)
     end
+
+    # @param [File?] file
+    # @return [Proc]
+    #   A proc that closes the file if it's open.
+    def close_file_proc(file)
+      proc { file.close if file && !file.closed? }
+    end
   end
 end

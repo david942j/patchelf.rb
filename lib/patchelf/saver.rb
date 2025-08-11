@@ -7,6 +7,7 @@ require 'elftools/util'
 require 'fileutils'
 require 'objspace'
 
+require 'patchelf/helper'
 require 'patchelf/mm'
 
 module PatchELF
@@ -35,7 +36,7 @@ module PatchELF
       @append_dyn = []
 
       # Ensure file is closed when the {Saver} object is garbage collected.
-      ObjectSpace.define_finalizer(self, self.class.close_file(f))
+      ObjectSpace.define_finalizer(self, Helper.close_file_proc(f))
     end
 
     # @return [void]
@@ -54,10 +55,6 @@ module PatchELF
     end
 
     private
-
-    def self.close_file(file)
-      proc { file.close if file && !file.closed? }
-    end
 
     def patch_interpreter
       return if @set[:interpreter].nil?
