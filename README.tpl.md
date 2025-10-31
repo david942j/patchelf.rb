@@ -4,7 +4,7 @@
 [![Build Status](https://github.com/david942j/patchelf.rb/workflows/build/badge.svg)](https://github.com/david942j/patchelf.rb/actions)
 [![Maintainability](https://qlty.sh/gh/david942j/projects/patchelf.rb/maintainability.svg)](https://qlty.sh/gh/david942j/projects/patchelf.rb)
 [![Code Coverage](https://qlty.sh/gh/david942j/projects/patchelf.rb/coverage.svg)](https://qlty.sh/gh/david942j/projects/patchelf.rb)
-[![Yard Docs](http://img.shields.io/badge/yard-docs-blue.svg)](https://www.rubydoc.info/github/david942j/patchelf.rb/)
+[![Yard Docs](http://img.shields.io/badge/yard-docs-blue.svg)](https://www.rubydoc.info/github/david942j/patchelf.rb/master)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](http://choosealicense.com/licenses/mit/)
 
 # patchelf.rb
