@@ -2,8 +2,10 @@
 # frozen_string_literal: true
 
 require 'elftools/elf_file'
+require 'objspace'
 
 require 'patchelf/exceptions'
+require 'patchelf/helper'
 require 'patchelf/logger'
 require 'patchelf/saver'
 
@@ -27,13 +29,17 @@ module PatchELF
     #     :silent = ignore the errors
     def initialize(filename, on_error: :log, logging: true)
       @in_file = filename
-      @elf = ELFTools::ELFFile.new(File.open(filename))
+      f = File.open(filename)
+      @elf = ELFTools::ELFFile.new(f)
       @set = {}
       @rpath_sym = :runpath
       @on_error = logging ? on_error : :exception
 
       on_error_syms = %i[exception log silent]
       raise ArgumentError, "on_error must be one of #{on_error_syms}" unless on_error_syms.include?(@on_error)
+
+      # Ensure file is closed when the {Patcher} object is garbage collected.
+      ObjectSpace.define_finalizer(self, Helper.close_file_proc(f))
     end
 
     # @return [String?]

@@ -5,6 +5,7 @@ require 'elftools/elf_file'
 require 'elftools/structs'
 require 'elftools/util'
 require 'fileutils'
+require 'objspace'
 
 require 'patchelf/helper'
 
@@ -64,6 +65,9 @@ module PatchELF
       # also be sure to update the stream offset passed to Segments::Segment.
       @elf = ELFTools::ELFFile.new(f)
       @buffer = StringIO.new(f.tap(&:rewind).read) # StringIO makes easier to work with Bindata
+
+      # Ensure file is closed when the {AltSaver} object is garbage collected.
+      ObjectSpace.define_finalizer(self, Helper.close_file_proc(f))
 
       @ehdr = @elf.header
       @endian = @elf.endian

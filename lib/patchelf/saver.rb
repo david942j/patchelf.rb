@@ -5,7 +5,9 @@ require 'elftools/elf_file'
 require 'elftools/structs'
 require 'elftools/util'
 require 'fileutils'
+require 'objspace'
 
+require 'patchelf/helper'
 require 'patchelf/mm'
 
 module PatchELF
@@ -27,10 +29,14 @@ module PatchELF
       @set = set
       # [{Integer => String}]
       @inline_patch = {}
-      @elf = ELFTools::ELFFile.new(File.open(in_file))
+      f = File.open(in_file)
+      @elf = ELFTools::ELFFile.new(f)
       @mm = PatchELF::MM.new(@elf)
       @strtab_extend_requests = []
       @append_dyn = []
+
+      # Ensure file is closed when the {Saver} object is garbage collected.
+      ObjectSpace.define_finalizer(self, Helper.close_file_proc(f))
     end
 
     # @return [void]
