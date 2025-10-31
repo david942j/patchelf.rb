@@ -31,7 +31,7 @@ module PatchELF
         needed: []
       }
       return $stdout.puts "PatchELF Version #{PatchELF::VERSION}" if argv.include?('--version')
-      return $stdout.puts option_parser unless parse(argv)
+      return $stdout.puts option_parser unless parse?(argv)
 
       # Now the options are (hopefully) valid, let's process the ELF file.
       begin
@@ -71,7 +71,7 @@ module PatchELF
       end
     end
 
-    def parse(argv)
+    def parse?(argv)
       remain = option_parser.permute(argv)
       return false if remain.first.nil?
 

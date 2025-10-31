@@ -23,6 +23,7 @@ libraries.
   s.required_ruby_version = '>= 3.1'
 
   s.add_dependency 'elftools', '>= 1.3'
+  s.add_dependency 'logger', '~> 1'
 
   s.add_development_dependency 'rake', '~> 13.0'
   s.add_development_dependency 'rspec', '~> 3'
