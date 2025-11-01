@@ -1,6 +1,6 @@
 [![Downloads](https://img.shields.io/endpoint?url=https://gem-badge-h3lg.onrender.com/downloads/patchelf)](https://rubygems.org/gems/patchelf)
 
-[![Gem Version](https://badge.fury.io/rb/one_gadget.svg)](https://badge.fury.io/rb/one_gadget)
+[![Gem Version](https://badge.fury.io/rb/patchelf.svg)](https://badge.fury.io/rb/patchelf)
 [![Build Status](https://github.com/david942j/patchelf.rb/workflows/build/badge.svg)](https://github.com/david942j/patchelf.rb/actions)
 [![Maintainability](https://qlty.sh/gh/david942j/projects/patchelf.rb/maintainability.svg)](https://qlty.sh/gh/david942j/projects/patchelf.rb)
 [![Code Coverage](https://qlty.sh/gh/david942j/projects/patchelf.rb/coverage.svg)](https://qlty.sh/gh/david942j/projects/patchelf.rb)
