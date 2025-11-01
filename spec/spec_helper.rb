@@ -17,7 +17,7 @@ SimpleCov.start do
 end
 
 module Helpers
-  def hook_logger(&_block)
+  def hook_logger(&)
     require 'patchelf/logger'
     require 'patchelf/helper'
 

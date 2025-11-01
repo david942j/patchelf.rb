@@ -579,7 +579,7 @@ module PatchELF
 
       cur_off = ehdr.num_bytes + (@segments.count * seg_num_bytes)
       Logger.debug "clearing first #{start_offset - cur_off} bytes"
-      with_buf_at(cur_off) { |buf| buf.fill("\x00", (start_offset - cur_off)) }
+      with_buf_at(cur_off) { |buf| buf.fill("\x00", start_offset - cur_off) }
 
       cur_off = write_replaced_sections cur_off, first_page, 0
       raise PatchError, "cur_off(#{cur_off}) != needed_space" if cur_off != needed_space
