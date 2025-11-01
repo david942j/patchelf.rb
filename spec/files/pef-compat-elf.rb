@@ -19,7 +19,7 @@ def aligndown(val, align = PAGE_SIZE)
 end
 
 def alignup(val, align = PAGE_SIZE)
-  (val & (align - 1)).zero? ? val : (aligndown(val, align) + align)
+  val.nobits?(align - 1) ? val : (aligndown(val, align) + align)
 end
 
 def cstr(str, start)

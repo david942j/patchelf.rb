@@ -49,7 +49,7 @@ module PatchELF
       abnormal_elf('No LOAD segment found, not an executable.') if load_segments.empty?
       # TODO: Handle only one LOAD. (be careful if memsz > filesz)
 
-      fgap_method || mgap_method || new_load_method
+      fgap_method? || mgap_method? || new_load_method
     end
 
     # Query if extended.
@@ -72,25 +72,25 @@ module PatchELF
 
     private
 
-    def fgap_method
+    def fgap_method?
       idx = find_gap { |prv, nxt| nxt.file_head - prv.file_tail }
       return false if idx.nil?
 
       loads = load_segments
       # prefer extend backwardly
-      return extend_backward(loads[idx - 1]) if writable?(loads[idx - 1])
+      return extend_backward?(loads[idx - 1]) if writable?(loads[idx - 1])
 
-      extend_forward(loads[idx])
+      extend_forward?(loads[idx])
     end
 
-    def extend_backward(seg, size = @request_size)
+    def extend_backward?(seg, size = @request_size)
       invoke_callbacks(seg, seg.file_tail)
       seg.header.p_filesz += size
       seg.header.p_memsz += size
       true
     end
 
-    def extend_forward(seg, size = @request_size)
+    def extend_forward?(seg, size = @request_size)
       seg.header.p_offset -= size
       seg.header.p_vaddr -= size
       seg.header.p_filesz += size
@@ -99,7 +99,7 @@ module PatchELF
       true
     end
 
-    def mgap_method
+    def mgap_method?
       # |  1  | |  2  |
       # |  1  |        |  2  |
       #=>
@@ -113,10 +113,10 @@ module PatchELF
       @extend_size = PatchELF::Helper.alignup(@request_size)
       shift_attributes
       # prefer backward than forward
-      return extend_backward(loads[idx - 1]) if writable?(loads[idx - 1])
+      return extend_backward?(loads[idx - 1]) if writable?(loads[idx - 1])
 
       # NOTE: loads[idx].file_head has been changed in shift_attributes
-      extend_forward(loads[idx], @extend_size)
+      extend_forward?(loads[idx], @extend_size)
     end
 
     def find_gap(check_sz: true)
