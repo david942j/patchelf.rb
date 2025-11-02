@@ -679,7 +679,7 @@ module PatchELF
         size = section.header.sh_size.to_i
         curr_off = section.header.sh_offset.to_i
 
-        if size == 0 || curr_off + size > end_off
+        if size.zero? || curr_off + size > end_off
           raise PatchError, 'cannot normalize PT_NOTE segment: partially mapped SHT_NOTE section'
         end
 
