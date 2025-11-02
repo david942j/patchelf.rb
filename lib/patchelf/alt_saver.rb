@@ -863,9 +863,9 @@ module PatchELF
       sec_name
     end
 
-    # given a +dyn.d_tag+, returns the section name it must be synced to.
-    # it may return nil, when given tag maps to no section,
-    # or when its okay to skip if section is not found.
+    # Given a +dyn.d_tag+, returns the section name it must be synced to.
+    # Returns +nil+ when given tag maps to no section, or when its okay to skip if section is not found.
+    # @return [String?]
     def dyn_tag_to_section_name(d_tag)
       case d_tag
       when ELFTools::Constants::DT_STRTAB, ELFTools::Constants::DT_STRSZ
@@ -899,6 +899,14 @@ module PatchELF
       end
     end
 
+    # @return [ELFTools::Structs::ELF_Shdr?]
+    def dyn_tag_to_shdr(d_tag)
+      sec_name = dyn_tag_to_section_name(d_tag)
+      return if sec_name.nil?
+
+      find_section(sec_name)&.header
+    end
+
     # updates dyn tags by syncing it with @section values
     def sync_dyn_tags!
       # Position of the fist dynamic tag.
@@ -916,10 +924,9 @@ module PatchELF
                         0
                       end
         else
-          sec_name = dyn_tag_to_section_name(dyn.d_tag)
-          next unless sec_name
+          shdr = dyn_tag_to_shdr(dyn.d_tag)
+          next if shdr.nil?
 
-          shdr = find_section(sec_name).header
           dyn.d_val = dyn.d_tag == ELFTools::Constants::DT_STRSZ ? shdr.sh_size.to_i : shdr.sh_addr.to_i
         end
 
