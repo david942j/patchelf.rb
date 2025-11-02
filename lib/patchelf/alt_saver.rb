@@ -130,14 +130,12 @@ module PatchELF
       find_section '.dynstr'
     end
 
-    # yields dynamic tag, and offset in buffer
+    # Yields dynamic tag, and its offset in @buffer.
+    # @yieldparam [ELFTools::Structs::ELF_Dyn] dyn
+    # @yieldparam [Integer] offset The offset of this dynamic tag within +@buffer+.
     def each_dynamic_tags
-      return unless block_given?
-
-      sec = find_section '.dynamic'
-      return unless sec
-
-      return if sec.header.sh_type == ELFTools::Constants::SHT_NOBITS
+      sec = find_section('.dynamic')
+      return if sec.nil? || sec.header.sh_type == ELFTools::Constants::SHT_NOBITS
 
       shdr = sec.header
       with_buf_at(shdr.sh_offset) do |buf|
@@ -149,8 +147,8 @@ module PatchELF
           break if dyn.d_tag == ELFTools::Constants::DT_NULL
 
           yield dyn, buf_dyn_offset
-          # there's a possibility for caller to modify @buffer.pos, seek to avoid such issues
-          buf.seek buf_dyn_offset + dyn.num_bytes
+          # It's possible the caller may modify @buffer.pos, seek to ensure it points to the next tag.
+          buf.seek(buf_dyn_offset + dyn.num_bytes)
         end
       end
     end
@@ -903,29 +901,27 @@ module PatchELF
 
     # updates dyn tags by syncing it with @section values
     def sync_dyn_tags!
+      # Position of the fist dynamic tag.
       dyn_table_offset = nil
       each_dynamic_tags do |dyn, buf_off|
         dyn_table_offset ||= buf_off
 
-        sec_name = dyn_tag_to_section_name(dyn.d_tag)
+        if dyn.d_tag == ELFTools::Constants::DT_MIPS_RLD_MAP_REL
+          rld_map = find_section('.rld_map')
+          dyn.d_val = if rld_map
+                        rld_map.header.sh_addr.to_i - (buf_off - dyn_table_offset) -
+                          find_section('.dynamic').header.sh_addr.to_i
+                      else
+                        Logger.warn 'DT_MIPS_RLD_MAP_REL entry is present, but .rld_map section is not'
+                        0
+                      end
+        else
+          sec_name = dyn_tag_to_section_name(dyn.d_tag)
+          next unless sec_name
 
-        unless sec_name
-          if dyn.d_tag == ELFTools::Constants::DT_MIPS_RLD_MAP_REL && ehdr.e_machine == ELFTools::Constants::EM_MIPS
-            rld_map = find_section('.rld_map')
-            dyn.d_val = if rld_map
-                          rld_map.header.sh_addr.to_i - (buf_off - dyn_table_offset) -
-                            find_section('.dynamic').header.sh_addr.to_i
-                        else
-                          Logger.warn 'DT_MIPS_RLD_MAP_REL entry is present, but .rld_map section is not'
-                          0
-                        end
-          end
-
-          next
+          shdr = find_section(sec_name).header
+          dyn.d_val = dyn.d_tag == ELFTools::Constants::DT_STRSZ ? shdr.sh_size.to_i : shdr.sh_addr.to_i
         end
-
-        shdr = find_section(sec_name).header
-        dyn.d_val = dyn.d_tag == ELFTools::Constants::DT_STRSZ ? shdr.sh_size.to_i : shdr.sh_addr.to_i
 
         with_buf_at(buf_off) { |wbuf| dyn.write(wbuf) }
       end
