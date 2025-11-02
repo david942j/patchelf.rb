@@ -945,6 +945,8 @@ module PatchELF
       nil
     end
 
+    # Some sections have their corresponding segment.
+    # Use this utility when a section is being patched so its segment should be updated with the same values.
     def sync_sec_to_seg(shdr, phdr)
       phdr.p_offset = shdr.sh_offset.to_i
       phdr.p_vaddr = phdr.p_paddr = shdr.sh_addr.to_i
@@ -962,6 +964,8 @@ module PatchELF
     end
 
     # Returns a blank shdr if the section doesn't exist.
+    #
+    # @return [ELFTools::Structs::ELF_Shdr]
     def find_or_create_section_header(rsec_name)
       shdr = find_section(rsec_name)&.header
       shdr ||= ELFTools::Structs::ELF_Shdr.new(endian: endian, elf_class: elf_class)
@@ -991,6 +995,51 @@ module PatchELF
       (s_start >= p_start && s_start < p_end) || (s_end > p_start && s_end <= p_end)
     end
 
+    # Used when patching sections.
+    # For sections with a correspondence segment, update the segment values.
+    # @return [void]
+    def section_sync_correspondence_segment(sec_name, shdr)
+      seg_type = {
+        '.interp' => ELFTools::Constants::PT_INTERP,
+        '.dynamic' => ELFTools::Constants::PT_DYNAMIC,
+        '.MIPS.abiflags' => ELFTools::Constants::PT_MIPS_ABIFLAGS,
+        '.note.gnu.property' => ELFTools::Constants::PT_GNU_PROPERTY
+      }[sec_name]
+      return if seg_type.nil?
+
+      phdrs_by_type(seg_type) { |phdr| sync_sec_to_seg(shdr, phdr) }
+    end
+
+    # Similar to +section_sync_correspondence_segment+ but dedicate for note sections as it is allowed to have multiple
+    # note segments.
+    # This function searches all note segments and only sync the one matched with the section values before patching.
+    #
+    # NOTE: This function is no-op if +shdr+ does not have section type +ELFTools::Constants::SHT_NOTE+.
+    #
+    # @param [Integer] orig_sh_offset The original section offset value.
+    # @param [Integer] orig_sh_size The original section size value.
+    # @param [ELFTools::Structs::ELF_Shdr] shdr The section header with values after patched.
+    #
+    # @return [void]
+    def sync_note_segment(orig_sh_offset, orig_sh_size, shdr)
+      return if shdr.sh_type != ELFTools::Constants::SHT_NOTE
+
+      phdrs_by_type(ELFTools::Constants::PT_NOTE) do |phdr|
+        s_start = orig_sh_offset
+        s_end = s_start + orig_sh_size
+        p_start = phdr.p_offset
+        p_end = p_start + phdr.p_filesz
+
+        # Skip if no overlap.
+        next unless section_bounds_within_segment?(s_start, s_end, p_start, p_end)
+
+        # Only support exact matches.
+        raise PatchError, 'unsupported overlap of SHT_NOTE and PT_NOTE' unless [p_start, p_end] == [s_start, s_end]
+
+        sync_sec_to_seg(shdr, phdr)
+      end
+    end
+
     def write_replaced_sections(cur_off, start_addr, start_offset)
       overwrite_replaced_sections
 
@@ -1016,30 +1065,8 @@ module PatchELF
         shdr.sh_size = rsec_data.size
 
         write_section_alignment(shdr)
-
-        seg_type = {
-          '.interp' => ELFTools::Constants::PT_INTERP,
-          '.dynamic' => ELFTools::Constants::PT_DYNAMIC,
-          '.MIPS.abiflags' => ELFTools::Constants::PT_MIPS_ABIFLAGS,
-          '.note.gnu.property' => ELFTools::Constants::PT_GNU_PROPERTY
-        }[rsec_name]
-
-        phdrs_by_type(seg_type) { |phdr| sync_sec_to_seg(shdr, phdr) }
-
-        if shdr.sh_type == ELFTools::Constants::SHT_NOTE
-          phdrs_by_type(ELFTools::Constants::PT_NOTE) do |phdr|
-            s_start = orig_sh_offset
-            s_end = s_start + orig_sh_size
-            p_start = phdr.p_offset
-            p_end = p_start + phdr.p_filesz
-
-            next unless section_bounds_within_segment?(s_start, s_end, p_start, p_end)
-
-            raise PatchError, 'unsupported overlap of SHT_NOTE and PT_NOTE' if p_start != s_start || p_end != s_end
-
-            sync_sec_to_seg(shdr, phdr)
-          end
-        end
+        section_sync_correspondence_segment(rsec_name, shdr)
+        sync_note_segment(orig_sh_offset, orig_sh_size, shdr)
 
         cur_off += Helper.alignup(rsec_data.size, @section_alignment)
       end
