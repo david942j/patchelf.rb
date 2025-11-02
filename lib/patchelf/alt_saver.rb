@@ -994,8 +994,6 @@ module PatchELF
     def write_replaced_sections(cur_off, start_addr, start_offset)
       overwrite_replaced_sections
 
-      noted_phdrs = Set.new
-
       # the sort is necessary, the strategy in ruby and Cpp to iterate map/hash
       # is different, patchelf v0.10 iterates the replaced_sections sorted by
       # keys.
@@ -1029,9 +1027,7 @@ module PatchELF
         phdrs_by_type(seg_type) { |phdr| sync_sec_to_seg(shdr, phdr) }
 
         if shdr.sh_type == ELFTools::Constants::SHT_NOTE
-          phdrs_by_type(ELFTools::Constants::PT_NOTE) do |phdr, idx|
-            next if noted_phdrs.include?(idx)
-
+          phdrs_by_type(ELFTools::Constants::PT_NOTE) do |phdr|
             s_start = orig_sh_offset
             s_end = s_start + orig_sh_size
             p_start = phdr.p_offset
@@ -1042,8 +1038,6 @@ module PatchELF
             raise PatchError, 'unsupported overlap of SHT_NOTE and PT_NOTE' if p_start != s_start || p_end != s_end
 
             sync_sec_to_seg(shdr, phdr)
-
-            noted_phdrs << idx
           end
         end
 
