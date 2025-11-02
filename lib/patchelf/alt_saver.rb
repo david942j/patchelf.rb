@@ -673,18 +673,13 @@ module PatchELF
       new_phdrs = []
 
       while curr_off < end_off
-        size = 0
-        sections_at_aligned_offset(curr_off) do |sec|
-          next if sec.type != ELFTools::Constants::SHT_NOTE
+        section = sections_at_aligned_offset(curr_off).find { |sec| sec.type == ELFTools::Constants::SHT_NOTE }
+        raise PatchError, 'cannot normalize PT_NOTE segment: non-contiguous SHT_NOTE sections' if section.nil?
 
-          size = sec.header.sh_size.to_i
-          curr_off = sec.header.sh_offset.to_i
-          break
-        end
+        size = section.header.sh_size.to_i
+        curr_off = section.header.sh_offset.to_i
 
-        raise PatchError, 'cannot normalize PT_NOTE segment: non-contiguous SHT_NOTE sections' if size.zero?
-
-        if curr_off + size > end_off
+        if size == 0 || curr_off + size > end_off
           raise PatchError, 'cannot normalize PT_NOTE segment: partially mapped SHT_NOTE section'
         end
 
@@ -708,6 +703,8 @@ module PatchELF
     end
 
     def sections_at_aligned_offset(offset)
+      return to_enum(__method__, offset) unless block_given?
+
       @sections.each do |sec|
         shdr = sec.header
 
