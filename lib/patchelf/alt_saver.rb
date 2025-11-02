@@ -741,7 +741,6 @@ module PatchELF
       phdr.p_vaddr -= shift if phdr.p_vaddr > shift
     end
 
-    # rubocop:disable Metrics/PerceivedComplexity
     def shift_segments(shift, start_offset)
       split_index = -1
       split_shift = 0
@@ -750,9 +749,8 @@ module PatchELF
         phdr = seg.header
         p_start = phdr.p_offset
 
-        if p_start <= start_offset && p_start + phdr.p_filesz > start_offset &&
-           phdr.p_type == ELFTools::Constants::PT_LOAD
-          raise PatchError, "split_index(#{split_index}) != -1" if split_index != -1
+        if (p_start...(p_start + phdr.p_filesz)).cover?(start_offset) && phdr.p_type == ELFTools::Constants::PT_LOAD
+          raise PatchError, 'PT_LOAD segments overlapped, unable to shift segments' if split_index != -1
 
           split_index = idx
           split_shift = start_offset - p_start
@@ -773,11 +771,10 @@ module PatchELF
         end
       end
 
-      raise PatchError, "split_index(#{split_index}) == -1" if split_index == -1
+      raise PatchError, "No PT_LOAD found covers offset 0x#{start_offset.to_s(16)}" if split_index == -1
 
       [split_index, split_shift]
     end
-    # rubocop:enable Metrics/PerceivedComplexity
 
     def shift_file(extra_pages, start_offset, extra_bytes)
       raise PatchError, "start_offset(#{start_offset}) < ehdr.num_bytes" if start_offset < ehdr.num_bytes
