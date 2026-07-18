@@ -4,15 +4,10 @@ require 'English'
 require 'fileutils'
 require 'securerandom'
 require 'simplecov'
-require 'simplecov_json_formatter'
 require 'tmpdir'
 require 'tty/platform'
 
 SimpleCov.start do
-  formatter SimpleCov::Formatter::MultiFormatter.new([
-                                                       SimpleCov::Formatter::JSONFormatter,
-                                                       SimpleCov::Formatter::HTMLFormatter
-                                                     ])
   add_filter '/spec/'
 end
 

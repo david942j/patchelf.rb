@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    strategy:
+      matrix:
+        platform: ["ubuntu-latest", "macos-latest"]
+        ruby: ["3.3", "3.4", "4.0"]
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Set up Git repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@d45b1a4e94b71acab930e56e79c6aa188764e7f9 # v1.316.0
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+
+      - name: Run tests
+        run: bundle exec rake
+
+  conclusion:
+    needs: tests
+    if: always()
+    runs-on: ubuntu-slim
+    steps:
+      - name: Result
+        env:
+          RESULT: ${{ needs.tests.result }}
+        run: |
+          [[ "${RESULT}" == success ]]

@@ -2,5 +2,7 @@
 /doc/
 /coverage/
 /.yardoc/
-
-Gemfile.lock
+/.bundle/
+/vendor/bundle/
+/*.gem
+.DS_Store

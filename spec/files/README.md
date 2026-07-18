@@ -12,7 +12,7 @@ There is no problem when we use patchelf.rb for both patching and restoring(func
 Lots of binaries bottled online were patched using patchelf.
 `Syncthing` case is a special case where patching happens fine but when the elf
 is run, it segfaults.
-[@david942j's explanation on why happens](https://github.com/david942j/patchelf.rb/issues/15#issuecomment-605767300)
+[@david942j's explanation on why happens](https://github.com/Homebrew/patchelf.rb/issues/15#issuecomment-605767300)
 A proper solution would be finding a simple work around in patchelf.rb.
 due to time constraints, it is not practical to test every binary in brew
 repo can be patched and executed.
@@ -26,7 +26,7 @@ if possible try to reproduce the same issue on a smaller ELF and use that ELF in
 
 ### 1.4) other notes
 * The newer versions of syncthing don't have this problem, they ship static binaries now.
-* related discussion: https://github.com/david942j/patchelf.rb/issues/15
+* related discussion: https://github.com/Homebrew/patchelf.rb/issues/15
 
 
 ## 2. pef-compat.elf
