@@ -4,10 +4,15 @@ require 'English'
 require 'fileutils'
 require 'securerandom'
 require 'simplecov'
+require 'simplecov-cobertura'
 require 'tmpdir'
 require 'tty/platform'
 
 SimpleCov.start do
+  formatter SimpleCov::Formatter::MultiFormatter.new([
+                                                       SimpleCov::Formatter::CoberturaFormatter,
+                                                       SimpleCov::Formatter::HTMLFormatter
+                                                     ])
   add_filter '/spec/'
 end
 
