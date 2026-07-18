@@ -30,6 +30,8 @@ jobs:
           bundler-cache: true
 
       - name: Run tests
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         run: bundle exec rake
 
       - name: Upload coverage results
@@ -37,6 +39,7 @@ jobs:
         with:
           files: coverage/coverage.xml
           disable_search: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   conclusion:
     needs: tests
