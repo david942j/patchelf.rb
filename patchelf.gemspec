@@ -17,10 +17,10 @@ libraries.
   s.authors       = ['david942j']
   s.email         = ['david942j@gmail.com']
   s.files         = Dir['lib/**/*.rb'] + Dir['bin/*'] + %w[README.md LICENSE]
-  s.homepage      = 'https://github.com/david942j/patchelf.rb'
+  s.homepage      = 'https://github.com/Homebrew/patchelf.rb'
   s.executables   = ['patchelf.rb']
 
-  s.required_ruby_version = '>= 3.1'
+  s.required_ruby_version = '>= 3.3'
 
   s.add_dependency 'elftools', '>= 1.3'
   s.add_dependency 'logger', '~> 1'
@@ -32,4 +32,7 @@ libraries.
   s.add_development_dependency 'tty-platform', '~> 0.1'
   s.add_development_dependency 'yard', '~> 0.9'
   s.metadata['rubygems_mfa_required'] = 'true'
+  s.metadata['source_code_uri'] = 'https://github.com/Homebrew/patchelf.rb'
+  s.metadata['bug_tracker_uri'] = 'https://github.com/Homebrew/patchelf.rb/issues'
+  s.metadata['funding_uri'] = 'https://github.com/sponsors/Homebrew'
 end

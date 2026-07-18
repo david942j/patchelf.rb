@@ -7,7 +7,7 @@ require 'yard'
 
 import 'tasks/readme.rake'
 
-task default: %i[readme rubocop spec]
+task default: %i[rubocop spec]
 
 RuboCop::RakeTask.new(:rubocop) do |task|
   task.patterns = ['lib/**/*.rb', 'spec/**/*.rb', 'bin/*']

@@ -1,11 +1,9 @@
 [![Downloads](https://img.shields.io/endpoint?url=https://gem-badge-h3lg.onrender.com/downloads/patchelf)](https://rubygems.org/gems/patchelf)
 
 [![Gem Version](https://badge.fury.io/rb/patchelf.svg)](https://badge.fury.io/rb/patchelf)
-[![Build Status](https://github.com/david942j/patchelf.rb/workflows/build/badge.svg)](https://github.com/david942j/patchelf.rb/actions)
-[![Maintainability](https://qlty.sh/gh/david942j/projects/patchelf.rb/maintainability.svg)](https://qlty.sh/gh/david942j/projects/patchelf.rb)
-[![Code Coverage](https://qlty.sh/gh/david942j/projects/patchelf.rb/coverage.svg)](https://qlty.sh/gh/david942j/projects/patchelf.rb)
-[![Yard Docs](http://img.shields.io/badge/yard-docs-blue.svg)](https://www.rubydoc.info/github/david942j/patchelf.rb/master)
-[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](http://choosealicense.com/licenses/mit/)
+[![CI](https://github.com/Homebrew/patchelf.rb/actions/workflows/tests.yml/badge.svg)](https://github.com/Homebrew/patchelf.rb/actions/workflows/tests.yml)
+[![Yard Docs](https://img.shields.io/badge/yard-docs-blue.svg)](https://www.rubydoc.info/gems/patchelf)
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](https://choosealicense.com/licenses/mit/)
 
 # patchelf.rb
 
@@ -105,4 +103,5 @@ The git history remains the definitive record of all contributions.
 
 ### Maintainers
 
+* Homebrew maintainers
 * david942j (@david942j)
