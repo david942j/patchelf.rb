@@ -2,6 +2,7 @@
 
 [![Gem Version](https://badge.fury.io/rb/patchelf.svg)](https://badge.fury.io/rb/patchelf)
 [![CI](https://github.com/Homebrew/patchelf.rb/actions/workflows/tests.yml/badge.svg)](https://github.com/Homebrew/patchelf.rb/actions/workflows/tests.yml)
+[![Coverage Status](https://codecov.io/gh/Homebrew/patchelf.rb/graph/badge.svg)](https://codecov.io/gh/Homebrew/patchelf.rb)
 [![Yard Docs](https://img.shields.io/badge/yard-docs-blue.svg)](https://www.rubydoc.info/gems/patchelf)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](https://choosealicense.com/licenses/mit/)
 
