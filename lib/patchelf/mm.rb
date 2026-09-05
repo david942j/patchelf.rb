@@ -105,12 +105,19 @@ module PatchELF
       #=>
       # |  1      | |  2  |
       # |  1      |    |  2  |
-      idx = find_gap(check_sz: false) { |prv, nxt| PatchELF::Helper.aligndown(nxt.mem_head, page_size) - prv.mem_tail }
+      extension = PatchELF::Helper.alignup(@request_size, page_size)
+      idx = find_gap(check_sz: false) do |prv, nxt|
+        gap = PatchELF::Helper.aligndown(nxt.mem_head, page_size) - prv.mem_tail
+        # Forward growth moves the entire mapping back by the rounded extension.
+        next 0 if !writable?(prv) && gap < extension
+
+        gap
+      end
       return false if idx.nil?
 
       loads = load_segments
       @threshold = loads[idx].file_head
-      @extend_size = PatchELF::Helper.alignup(@request_size, page_size)
+      @extend_size = extension
       shift_attributes
       # prefer backward than forward
       return extend_backward?(loads[idx - 1]) if writable?(loads[idx - 1])
