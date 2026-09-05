@@ -105,12 +105,12 @@ module PatchELF
       #=>
       # |  1      | |  2  |
       # |  1      |    |  2  |
-      idx = find_gap(check_sz: false) { |prv, nxt| PatchELF::Helper.aligndown(nxt.mem_head) - prv.mem_tail }
+      idx = find_gap(check_sz: false) { |prv, nxt| PatchELF::Helper.aligndown(nxt.mem_head, page_size) - prv.mem_tail }
       return false if idx.nil?
 
       loads = load_segments
       @threshold = loads[idx].file_head
-      @extend_size = PatchELF::Helper.alignup(@request_size)
+      @extend_size = PatchELF::Helper.alignup(@request_size, page_size)
       shift_attributes
       # prefer backward than forward
       return extend_backward?(loads[idx - 1]) if writable?(loads[idx - 1])
@@ -160,8 +160,12 @@ module PatchELF
         next unless seg.header.p_offset >= threshold
 
         seg.header.p_offset += extend_size
-        # We have to change align of LOAD segment since ld.so checks it.
-        seg.header.p_align = Helper.page_size if seg.is_a?(ELFTools::Segments::LoadSegment)
+        # Preserve a valid alignment; ld.so requires LOAD addresses to be congruent.
+        next unless seg.is_a?(ELFTools::Segments::LoadSegment) &&
+                    seg.header.p_align.nonzero? &&
+                    ((seg.header.p_vaddr - seg.header.p_offset) % seg.header.p_align).nonzero?
+
+        seg.header.p_align = page_size
       end
 
       @elf.header.e_shoff += extend_size if @elf.header.e_shoff >= threshold
@@ -177,6 +181,10 @@ module PatchELF
         block.call(cur, seg.offset_to_vma(cur))
         cur += sz
       end
+    end
+
+    def page_size
+      Helper.page_size(@elf.header.e_machine)
     end
 
     def abnormal_elf(msg)
