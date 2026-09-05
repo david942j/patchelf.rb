@@ -20,4 +20,21 @@ describe PatchELF::Helper do
     expect(described_class.alignup(0x33, 0x20)).to be 0x40
     expect(described_class.alignup(0x10, 0x8)).to be 0x10
   end
+
+  it 'returns the target architecture page size' do
+    {
+      ELFTools::Constants::EM_ALPHA => 0x10000,
+      ELFTools::Constants::EM_IA_64 => 0x10000,
+      ELFTools::Constants::EM_MIPS => 0x10000,
+      ELFTools::Constants::EM_PPC => 0x10000,
+      ELFTools::Constants::EM_PPC64 => 0x10000,
+      ELFTools::Constants::EM_AARCH64 => 0x10000,
+      ELFTools::Constants::EM_TILEGX => 0x10000,
+      ELFTools::Constants::EM_LOONGARCH => 0x10000,
+      ELFTools::Constants::EM_SPARC => 0x2000,
+      ELFTools::Constants::EM_SPARCV9 => 0x2000
+    }.each do |e_machine, page_size|
+      expect(described_class.page_size(e_machine)).to eq page_size
+    end
+  end
 end
