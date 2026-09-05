@@ -24,7 +24,7 @@ describe PatchELF::MM do
     f
   end
 
-  def test_dispatch(request_size, loads, &block)
+  def test_dispatch(request_size, loads, e_machine: ELFTools::Constants::EM_X86_64, &block)
     elf = {}
     allow(elf).to receive(:segments_by_type).and_return loads
     obj = allow(elf).to receive(:each_segments)
@@ -32,6 +32,7 @@ describe PatchELF::MM do
     allow(elf).to receive(:each_sections) {} # do nothing
     ehdr = ELFTools::Structs::ELF_Ehdr.new(endian: :little)
     ehdr.elf_class = 64
+    ehdr.e_machine = e_machine
     allow(elf).to receive(:header).and_return ehdr
 
     mm = described_class.new(elf)
@@ -55,11 +56,11 @@ describe PatchELF::MM do
     end
 
     it 'mgap' do
-      loads = [make_load(0, 0x666, 0x1000, 0x666, 'rx'), make_load(0x668, 8, 0x2668, 8, 'rw')]
+      loads = [make_load(0, 0x666, 0x1000, 0x666, 'rx'), make_load(0x668, 8, 0x3668, 8, 'rw')]
       called = 0
       test_dispatch(0x100, loads) do |off, vaddr|
         expect(off).to be 0x668
-        expect(vaddr).to be 0x1668
+        expect(vaddr).to be 0x2668
         called += 1
       end
       expect(loads[1].file_head).to be 0x668
@@ -69,6 +70,82 @@ describe PatchELF::MM do
     it 'new_load_method' do
       loads = [make_load(0, 0xa2c, 0, 0xa2c, 'rx'), make_load(0xeb0, 0x158, 0x1eb0, 0x15c, 'rw')]
       expect { test_dispatch(0x2000, loads) }.to raise_error(NotImplementedError)
+    end
+  end
+
+  describe 'architecture-specific page sizes' do
+    it 'mgap with AArch64 (64KB page size)' do
+      loads = [
+        make_load(0, 0xf800, 0x10000, 0xf800, 'rx'),
+        make_load(0x10000, 0x1000, 0x30000, 0x1000, 'rw')
+      ]
+      loads.each { |seg| seg.header.p_align = 0x10000 }
+      called = 0
+      test_dispatch(0x1000, loads, e_machine: ELFTools::Constants::EM_AARCH64) do |off, vaddr|
+        expect(off).to be 0x10000
+        expect(vaddr).to be 0x20000
+        called += 1
+      end
+      expect(loads[1].file_head).to be 0x10000
+      expect(PatchELF::Helper.aligndown(loads[1].mem_head, 0x10000))
+        .to be >= PatchELF::Helper.alignup(loads[0].mem_tail, 0x10000)
+      expect(called).to be 1
+    end
+
+    [0x20000, 0x22000].each do |vaddr|
+      it "rejects a rounded forward extension that overlaps a mapped page at #{vaddr.to_s(16)}" do
+        loads = [
+          make_load(0, 0x1800, 0x10000, 0x1800, 'rx'),
+          make_load(0x2000, 0x1000, vaddr, 0x1000, 'rw')
+        ]
+        loads.each { |seg| seg.header.p_align = 0x1000 }
+        headers = loads.map { |seg| seg.header.to_binary_s }
+        callback = double('callback')
+        expect(callback).not_to receive(:call)
+
+        expect do
+          test_dispatch(0x1000, loads, e_machine: ELFTools::Constants::EM_AARCH64) { |*args| callback.call(*args) }
+        end.to raise_error(NotImplementedError)
+        expect(loads.map { |seg| seg.header.to_binary_s }).to eq headers
+      end
+    end
+
+    it 'allows backward growth when only the unrounded request fits' do
+      loads = [
+        make_load(0, 0x1800, 0x10000, 0x1800, 'rw'),
+        make_load(0x2000, 0x1000, 0x20000, 0x1000, 'r')
+      ]
+      loads.each { |seg| seg.header.p_align = 0x1000 }
+      test_dispatch(0x1000, loads, e_machine: ELFTools::Constants::EM_AARCH64) do |off, vaddr|
+        expect(off).to be 0x1800
+        expect(vaddr).to be 0x11800
+      end
+      expect(loads[0].mem_tail).to be 0x12800
+      expect(loads[1].file_head).to be 0x12000
+    end
+
+    it 'preserves congruent PT_LOAD alignment after shifting' do
+      loads = [
+        make_load(0, 0x1000, 0x10000, 0x1000, 'rx'),
+        make_load(0x1800, 0x1000, 0x15800, 0x1000, 'rw')
+      ]
+      loads[1].header.p_align = 0x2000
+      test_dispatch(0x2000, loads)
+      expect(loads[1].header.p_align).to eq 0x2000
+      expect(loads[1].header.p_vaddr % loads[1].header.p_align)
+        .to eq(loads[1].header.p_offset % loads[1].header.p_align)
+    end
+
+    it 'repairs PT_LOAD alignment made incongruent by shifting' do
+      loads = [
+        make_load(0, 0x1000, 0x1000, 0x1000, 'rx'),
+        make_load(0x1800, 0x1000, 0x3800, 0x1000, 'rw')
+      ]
+      loads[1].header.p_align = 0x2000
+      test_dispatch(0x1000, loads)
+      expect(loads[1].header.p_align).to eq 0x1000
+      expect(loads[1].header.p_vaddr % loads[1].header.p_align)
+        .to eq(loads[1].header.p_offset % loads[1].header.p_align)
     end
   end
 
