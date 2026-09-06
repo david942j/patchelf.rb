@@ -73,6 +73,17 @@ describe PatchELF::Patcher do
         expect(described_class.new(f1).runpath).to eq new_runpath
       end
     end
+
+    it 'updates the input file when no output path is given' do
+      with_tempfile do |tmp|
+        FileUtils.cp(bin_path('runpath.elf'), tmp)
+        patcher = described_class.new(tmp)
+        patcher.runpath = '/updated/in/place'
+        patcher.save
+
+        expect(described_class.new(tmp).runpath).to eq '/updated/in/place'
+      end
+    end
   end
 
   describe 'interpreter=' do
@@ -106,7 +117,7 @@ describe PatchELF::Patcher do
     context('patchelf_compatible: false') do
       it_behaves_like 'still executable after patching'
 
-      it 'patches fine but segfaults on execution' do
+      it 'records the known Syncthing execution failure until it is fixed' do
         linux_only!
 
         patcher = get_patcher('syncthing')
@@ -115,8 +126,10 @@ describe PatchELF::Patcher do
         patcher.rpath = patcher.rpath.gsub('@@HOMEBREW_PREFIX@@', '')
         with_tempfile do |tmp|
           patcher.save(tmp)
-          expect(`#{tmp} --version`).to eq ''
-          expect($CHILD_STATUS.termsig).to eq Signal.list['SEGV']
+          output = `#{tmp} --version`
+          pending('default saver output is not executable; see issue #15') unless $CHILD_STATUS.success?
+          expect(output).to include('syncthing v1.4.0 "Fermium Flea"')
+          expect($CHILD_STATUS.exitstatus).to eq 0
         end
       end
     end
@@ -231,6 +244,17 @@ describe PatchELF::Patcher do
 
     context 'patchelf_compatible: true' do
       it_behaves_like 'runpath=', { patchelf_compatible: true }
+
+      it 'adds a runpath to a 32-bit ELF' do
+        patcher = get_patcher('pie32.elf', on_error: :silent)
+        expect(patcher.runpath).to be_nil
+        patcher.runpath = 'XD'
+
+        with_tempfile do |tmp|
+          patcher.save(tmp, patchelf_compatible: true)
+          expect(described_class.new(tmp).runpath).to eq 'XD'
+        end
+      end
 
       it 'force converts DT_RPATH to DT_RUNPATH when DT_RUNPATH is missing' do
         patcher = get_patcher('rpath.elf', on_error: :silent)

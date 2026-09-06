@@ -2,6 +2,7 @@ AllCops:
   DisplayCopNames: true
   DisplayStyleGuide: true
   NewCops: enable
+  SuggestExtensions: false
 
 Gemspec/DevelopmentDependencies:
   Enabled: false

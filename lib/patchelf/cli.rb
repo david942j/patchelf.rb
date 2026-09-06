@@ -11,14 +11,14 @@ module PatchELF
     # Name of binary.
     SCRIPT_NAME = 'patchelf.rb'
     # CLI usage string.
-    USAGE = format('Usage: %s <commands> FILENAME [OUTPUT_FILE]', SCRIPT_NAME).freeze
+    USAGE = format('Usage: %s [OPTIONS] INPUT_FILE [OUTPUT_FILE]', SCRIPT_NAME).freeze
 
     module_function
 
     # Main method of CLI.
     # @param [Array<String>] argv
     #   Command line arguments.
-    # @return [void]
+    # @return [Integer] Process exit status: zero on success, non-zero on usage or input errors.
     # @example
     #   PatchELF::CLI.work(%w[--help])
     #   # usage message to stdout
@@ -30,27 +30,41 @@ module PatchELF
         print: [],
         needed: []
       }
-      return $stdout.puts "PatchELF Version #{PatchELF::VERSION}" if argv.include?('--version')
-      return $stdout.puts option_parser unless parse?(argv)
+      unless parse?(argv)
+        $stdout.puts option_parser
+        return 1
+      end
+
+      case @options[:action]
+      when :version
+        $stdout.puts "PatchELF Version #{PatchELF::VERSION}"
+        return 0
+      when :help
+        $stdout.puts option_parser
+        return 0
+      end
 
       # Now the options are (hopefully) valid, let's process the ELF file.
-      begin
-        @patcher = PatchELF::Patcher.new(@options[:in_file])
-      rescue ELFTools::ELFError, Errno::ENOENT => e
-        return PatchELF::Logger.error(e.message)
-      end
+      @patcher = PatchELF::Patcher.new(@options[:in_file])
       patcher.use_rpath! if @options[:force_rpath]
       readonly
       patch_requests
       patcher.save(@options[:out_file])
+      0
+    rescue OptionParser::ParseError, ELFTools::ELFError, SystemCallError, NotImplementedError => e
+      PatchELF::Logger.error(e.message)
+      1
     end
 
     private
 
+    # @return [PatchELF::Patcher]
     def patcher
       @patcher
     end
 
+    # Print the requested ELF metadata.
+    # @return [void]
     def readonly
       @options[:print].uniq.each do |s|
         content = patcher.__send__(s)
@@ -61,6 +75,8 @@ module PatchELF
       end
     end
 
+    # Apply all requested ELF mutations to the patcher.
+    # @return [void]
     def patch_requests
       @options[:set].each do |sym, val|
         patcher.__send__(:"#{sym}=", val)
@@ -71,15 +87,21 @@ module PatchELF
       end
     end
 
+    # Parse options and capture the input and optional output paths.
+    # @param [Array<String>] argv
+    # @return [Boolean]
     def parse?(argv)
       remain = option_parser.permute(argv)
+      return true if @options[:action]
       return false if remain.first.nil?
+      raise OptionParser::InvalidArgument, 'too many positional arguments' if remain.length > 2
 
       @options[:in_file] = remain.first
       @options[:out_file] = remain[1] # can be nil
       true
     end
 
+    # @return [OptionParser]
     def option_parser
       @option_parser ||= OptionParser.new do |opts|
         opts.banner = USAGE
@@ -139,7 +161,13 @@ module PatchELF
           @options[:set][:soname] = soname
         end
 
-        opts.on('--version', 'Show current gem\'s version.')
+        opts.on('-h', '--help', 'Show this help.') do
+          @options[:action] = :help
+        end
+
+        opts.on('--version', 'Show current gem\'s version.') do
+          @options[:action] = :version
+        end
       end
     end
 

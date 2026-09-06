@@ -12,7 +12,9 @@ permissions:
 
 jobs:
   tests:
+    timeout-minutes: 15
     strategy:
+      fail-fast: false
       matrix:
         platform: ["ubuntu-latest", "macos-latest"]
         ruby: ["3.3", "3.4", "4.0"]
@@ -30,8 +32,6 @@ jobs:
           bundler-cache: true
 
       - name: Run tests
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         run: bundle exec rake
 
       - name: Upload coverage results
@@ -39,7 +39,6 @@ jobs:
         with:
           files: coverage/coverage.xml
           disable_search: true
-          token: ${{ secrets.CODECOV_TOKEN }}
 
   conclusion:
     needs: tests

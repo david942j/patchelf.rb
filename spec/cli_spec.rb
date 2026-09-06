@@ -1,13 +1,17 @@
 # frozen_string_literal: true
 
+require 'open3'
+
 require 'patchelf/cli'
 require 'patchelf/version'
 
 describe PatchELF::CLI do
   it 'invalid input' do
-    expect { hook_logger { described_class.work(%w[--pi file_not_exists]) } }.to output(<<-EOS).to_stdout
+    status = nil
+    expect { hook_logger { status = described_class.work(%w[--pi file_not_exists]) } }.to output(<<-EOS).to_stdout
 [ERROR] No such file or directory @ rb_sysopen - file_not_exists
     EOS
+    expect(status).to eq 1
   end
 
   it 'print' do
@@ -33,15 +37,72 @@ rpath: /not_exists:/lib:/pusheen/is/fat
   end
 
   it 'version' do
-    expect { hook_logger { described_class.work(%w[--version]) } }.to output(<<-EOS).to_stdout
+    status = nil
+    expect { hook_logger { status = described_class.work(%w[--version]) } }.to output(<<-EOS).to_stdout
 PatchELF Version #{PatchELF::VERSION}
     EOS
+    expect(status).to eq 0
+  end
+
+  it 'help' do
+    status = nil
+    expect { status = described_class.work(%w[--help]) }.to output(
+      /\AUsage: patchelf\.rb \[OPTIONS\] INPUT_FILE \[OUTPUT_FILE\]\n(?=.*-h, --help)(?=.*--version)/m
+    ).to_stdout
+    expect(status).to eq 0
+  end
+
+  it 'accepts an unambiguous long version-option abbreviation' do
+    status = nil
+    expect { status = described_class.work(%w[--vers]) }.to output(
+      "PatchELF Version #{PatchELF::VERSION}\n"
+    ).to_stdout
+    expect(status).to eq 0
+  end
+
+  it 'does not treat a required option argument named --help as a help request' do
+    status = nil
+    expect { status = described_class.work(%w[--add-needed --help]) }.to output(
+      /\AUsage: patchelf\.rb \[OPTIONS\] INPUT_FILE \[OUTPUT_FILE\]/
+    ).to_stdout
+    expect(status).to eq 1
+  end
+
+  it 'treats an option-like path after -- as the input file' do
+    patcher = instance_double(PatchELF::Patcher, save: nil)
+    expect(PatchELF::Patcher).to receive(:new).with('--version').and_return(patcher)
+
+    expect(described_class.work(%w[-- --version])).to eq 0
   end
 
   it 'no input file' do
-    expect { hook_logger { described_class.work(%w[--pi]) } }.to output(
-      described_class.__send__(:option_parser).help
+    status = nil
+    expect { hook_logger { status = described_class.work(%w[--pi]) } }.to output(
+      /\AUsage: patchelf\.rb \[OPTIONS\] INPUT_FILE \[OUTPUT_FILE\]/
     ).to_stdout
+    expect(status).to eq 1
+  end
+
+  it 'returns a clean error when patching fails' do
+    patcher = instance_double(PatchELF::Patcher)
+    allow(PatchELF::Patcher).to receive(:new).and_return(patcher)
+    allow(patcher).to receive(:save).and_raise(PatchELF::PatchError, 'cannot rewrite ELF')
+
+    status = nil
+    expect { hook_logger { status = described_class.work(['input.elf']) } }
+      .to output("[ERROR] cannot rewrite ELF\n").to_stdout
+    expect(status).to eq 1
+  end
+
+  it 'returns a clean error for an unsupported patch operation' do
+    patcher = instance_double(PatchELF::Patcher)
+    allow(PatchELF::Patcher).to receive(:new).and_return(patcher)
+    allow(patcher).to receive(:save).and_raise(NotImplementedError, 'operation not implemented')
+
+    status = nil
+    expect { hook_logger { status = described_class.work(['input.elf']) } }
+      .to output("[ERROR] operation not implemented\n").to_stdout
+    expect(status).to eq 1
   end
 
   it 'set interpreter' do
@@ -86,6 +147,47 @@ soname: XDD
       expect { hook_logger { described_class.work(['--pr', tmp]) } }.to output(<<-EOS).to_stdout
 runpath: /xdd
       EOS
+    end
+  end
+
+  describe 'executable' do
+    def run_executable(*args)
+      root = File.expand_path('..', __dir__)
+      Open3.capture3(Gem.ruby, "-I#{File.join(root, 'lib')}", File.join(root, 'bin/patchelf.rb'), *args)
+    end
+
+    it 'returns a non-zero status without a Ruby backtrace for an invalid option' do
+      stdout, stderr, status = run_executable('--not-an-option')
+
+      expect(stdout).to be_empty
+      expect(stderr).to include('[ERROR] invalid option: --not-an-option')
+      expect(stderr).not_to include('lib/patchelf/cli.rb')
+      expect(status.exitstatus).to eq 1
+    end
+
+    it 'returns a non-zero status for too many positional arguments' do
+      stdout, stderr, status = run_executable(bin_path('pie.elf'), 'output.elf', 'extra')
+
+      expect(stdout).to be_empty
+      expect(stderr).to include('[ERROR] invalid argument: too many positional arguments')
+      expect(status.exitstatus).to eq 1
+    end
+
+    it 'returns a non-zero status when the input does not exist' do
+      stdout, stderr, status = run_executable('--pi', 'file_not_exists')
+
+      expect(stdout).to be_empty
+      expect(stderr).to include('[ERROR]', 'file_not_exists')
+      expect(status.exitstatus).to eq 1
+    end
+
+    it 'returns a non-zero status without a Ruby backtrace for a directory input' do
+      stdout, stderr, status = run_executable('--pi', File.join(__dir__, 'files'))
+
+      expect(stdout).to be_empty
+      expect(stderr).to include('[ERROR]', 'Is a directory')
+      expect(stderr).not_to include('lib/patchelf/cli.rb')
+      expect(status.exitstatus).to eq 1
     end
   end
 end
