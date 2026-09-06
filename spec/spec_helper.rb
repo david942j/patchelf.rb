@@ -8,12 +8,26 @@ require 'simplecov-cobertura'
 require 'tmpdir'
 require 'tty/platform'
 
+SimpleCov.command_name 'RSpec'
 SimpleCov.start do
-  formatter SimpleCov::Formatter::MultiFormatter.new([
-                                                       SimpleCov::Formatter::CoberturaFormatter,
-                                                       SimpleCov::Formatter::HTMLFormatter
-                                                     ])
-  add_filter '/spec/'
+  formatter SimpleCov::Formatter::MultiFormatter.new(
+    [SimpleCov::Formatter::CoberturaFormatter, SimpleCov::Formatter::HTMLFormatter]
+  )
+  cover 'lib/**/*.rb'
+  enable_coverage :branch
+  skip '/spec/'
+end
+
+RSpec.configure do |config|
+  config.before(:suite) do
+    all_spec_files = Dir[File.join(__dir__, '**', '*_spec.rb')].map { |path| File.expand_path(path) }.sort
+    selected_spec_files = RSpec.configuration.files_to_run.map { |path| File.expand_path(path) }.sort
+    unfiltered = [RSpec.configuration.inclusion_filter, RSpec.configuration.exclusion_filter].all? do |filter|
+      filter.rules.empty?
+    end
+
+    SimpleCov.minimum_coverage line: 95, branch: 80 if unfiltered && selected_spec_files == all_spec_files
+  end
 end
 
 module Helpers
@@ -27,9 +41,9 @@ module Helpers
     new_logger = ::Logger.new($stdout)
     new_logger.formatter = org_logger.formatter
     PatchELF::Logger.instance_variable_set(:@logger, new_logger)
-    ret = yield
+    yield
+  ensure
     PatchELF::Logger.instance_variable_set(:@logger, org_logger)
-    ret
   end
 
   def with_tempfile

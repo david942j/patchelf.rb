@@ -318,7 +318,7 @@ module PatchELF
       zi = StringIO.new
       dyn_rpath.write zi
       zi.rewind
-      new_dynamic_data[0...dyn_num_bytes] = zi.read
+      new_dynamic_data[0...dyn_num_bytes] = zi.read.b
     end
 
     # given a index into old_sections table
@@ -332,7 +332,7 @@ module PatchELF
       raise ArgumentError if old_shndx >= old_sections.count
 
       old_sec = old_sections[old_shndx]
-      raise PatchError, "old_sections[#{shndx}] is nil" if old_sec.nil?
+      raise PatchError, "old_sections[#{old_shndx}] is nil" if old_sec.nil?
 
       # TODO: handle case of non existing section in (new) @sections.
       find_section_idx(old_sec.name)

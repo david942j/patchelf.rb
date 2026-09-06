@@ -3,4 +3,4 @@
 
 require 'patchelf/cli'
 
-PatchELF::CLI.work(ARGV)
+exit PatchELF::CLI.work(ARGV)

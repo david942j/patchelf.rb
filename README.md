@@ -1,150 +1,148 @@
-[![Downloads](https://img.shields.io/endpoint?url=https://gem-badge-h3lg.onrender.com/downloads/patchelf)](https://rubygems.org/gems/patchelf)
+# patchelf.rb
 
 [![Gem Version](https://badge.fury.io/rb/patchelf.svg)](https://badge.fury.io/rb/patchelf)
 [![CI](https://github.com/Homebrew/patchelf.rb/actions/workflows/tests.yml/badge.svg)](https://github.com/Homebrew/patchelf.rb/actions/workflows/tests.yml)
-[![Coverage Status](https://codecov.io/gh/Homebrew/patchelf.rb/graph/badge.svg)](https://codecov.io/gh/Homebrew/patchelf.rb)
-[![Yard Docs](https://img.shields.io/badge/yard-docs-blue.svg)](https://www.rubydoc.info/gems/patchelf)
-[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](https://choosealicense.com/licenses/mit/)
+[![Coverage](https://codecov.io/gh/Homebrew/patchelf.rb/graph/badge.svg)](https://codecov.io/gh/Homebrew/patchelf.rb)
+[![API documentation](https://img.shields.io/badge/API-RubyDoc-blue.svg)](https://www.rubydoc.info/gems/patchelf)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-# patchelf.rb
+`patchelf.rb` is a pure-Ruby library and command-line tool for inspecting and
+modifying selected fields in ELF executables and shared libraries. It implements
+the operations Homebrew needs, but it is not a complete drop-in replacement for
+[NixOS/patchelf](https://github.com/NixOS/patchelf).
 
-Implements features of NixOS/patchelf in pure Ruby.
+## Requirements
+
+- Ruby 3.3 or newer.
+- An ELF input file. The host running Ruby does not itself need to be Linux.
+
+CI tests the gem on Linux and macOS with Ruby 3.3, 3.4, and 4.0. Tests that
+execute patched ELF files run on Linux only. Windows is not currently tested.
 
 ## Installation
 
-Available on RubyGems.org!
-```
-$ gem install patchelf
-```
+Install the released gem from RubyGems:
 
-## Usage
-
-```
-$ patchelf.rb
-# Usage: patchelf.rb <commands> FILENAME [OUTPUT_FILE]
-#         --print-interpreter, --pi    Show interpreter's name.
-#         --print-needed, --pn         Show needed libraries specified in DT_NEEDED.
-#         --print-runpath, --pr        Show the path specified in DT_RUNPATH.
-#         --print-soname, --ps         Show soname specified in DT_SONAME.
-#         --set-interpreter, --interp INTERP
-#                                      Set interpreter's name.
-#         --set-needed, --needed LIB1,LIB2,LIB3
-#                                      Set needed libraries, this will remove all existent needed libraries.
-#         --add-needed LIB             Append a new needed library.
-#         --remove-needed LIB          Remove a needed library.
-#         --replace-needed LIB1,LIB2   Replace needed library LIB1 as LIB2.
-#         --set-runpath, --runpath PATH
-#                                      Set the path of runpath.
-#         --force-rpath                According to the ld.so docs, DT_RPATH is obsolete,
-#                                      patchelf.rb will always try to get/set DT_RUNPATH first.
-#                                      Use this option to force every operations related to runpath (e.g. --runpath)
-#                                      to consider 'DT_RPATH' instead of 'DT_RUNPATH'.
-#         --set-soname, --so SONAME    Set name of a shared library.
-#         --version                    Show current gem's version.
-
+```console
+gem install patchelf
 ```
 
-### Display information
-```
-$ patchelf.rb --print-interpreter --print-needed /bin/ls
-# interpreter: /lib64/ld-linux-x86-64.so.2
-# needed: libselinux.so.1 libc.so.6
+Or add it to a Bundler-managed project:
 
+```ruby
+gem 'patchelf'
 ```
 
-### Change the dynamic loader (interpreter)
-```
-# $ patchelf.rb --interp NEW_INTERP input.elf output.elf
-$ patchelf.rb --interp /lib/AAAA.so /bin/ls ls.patch
+## Command-line usage
 
-$ file ls.patch
-# ls.patch: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib/AAAA.so, for GNU/Linux 3.2.0, BuildID[sha1]=9567f9a28e66f4d7ec4baf31cfbf68d0410f0ae6, stripped
-
+```console
+patchelf.rb [OPTIONS] INPUT_FILE [OUTPUT_FILE]
 ```
 
-### Modify dependency libraries
+If `OUTPUT_FILE` is omitted, the input file is modified in place. In-place
+writes are not atomic, so use an explicit output path when the original cannot
+be recreated safely.
 
-#### Add
-```
-$ patchelf.rb --add-needed libnew.so /bin/ls ls.patch
-```
+Run `patchelf.rb --help` for the complete option list. Common operations are:
 
-#### Remove
-```
-$ patchelf.rb --remove-needed libc.so.6 /bin/ls ls.patch
-```
+| Operation | Option |
+| --- | --- |
+| Print the interpreter | `--print-interpreter`, `--pi` |
+| Print needed libraries | `--print-needed`, `--pn` |
+| Print `DT_RUNPATH` | `--print-runpath`, `--pr` |
+| Print the shared-library name | `--print-soname`, `--ps` |
+| Set the interpreter | `--set-interpreter INTERP`, `--interp INTERP` |
+| Set all needed libraries | `--set-needed LIB1,LIB2`, `--needed LIB1,LIB2` |
+| Add, remove, or replace one needed library | `--add-needed`, `--remove-needed`, `--replace-needed` |
+| Set `DT_RUNPATH` | `--set-runpath PATH`, `--runpath PATH` |
+| Operate on `DT_RPATH` instead | `--force-rpath` |
+| Set the shared-library name | `--set-soname SONAME`, `--so SONAME` |
 
-#### Replace
-```
-$ patchelf.rb --replace-needed libc.so.6,libcnew.so.6 /bin/ls ls.patch
+These examples use Linux paths and tools:
 
-$ readelf -d ls.patch | grep NEEDED
-#  0x0000000000000001 (NEEDED)             Shared library: [libselinux.so.1]
-#  0x0000000000000001 (NEEDED)             Shared library: [libcnew.so.6]
+```console
+# Inspect an executable.
+patchelf.rb --print-interpreter --print-needed /bin/ls
 
-```
+# Write a changed copy instead of modifying the input.
+patchelf.rb --runpath '$ORIGIN/../lib' input.elf output.elf
 
-#### Set directly
-```
-$ patchelf.rb --needed a.so,b.so,c.so /bin/ls ls.patch
-
-$ readelf -d ls.patch | grep NEEDED
-#  0x0000000000000001 (NEEDED)             Shared library: [a.so]
-#  0x0000000000000001 (NEEDED)             Shared library: [b.so]
-#  0x0000000000000001 (NEEDED)             Shared library: [c.so]
-
-```
-
-### Set RUNPATH of an executable
-```
-$ patchelf.rb --runpath . /bin/ls ls.patch
-
-$ readelf -d ls.patch | grep RUNPATH
-#  0x000000000000001d (RUNPATH)            Library runpath: [.]
-
+# Replace one DT_NEEDED entry.
+patchelf.rb --replace-needed libc.so.6,libcnew.so.6 input.elf output.elf
 ```
 
-### Change SONAME of a shared library
-```
-$ patchelf.rb --so libc.so.217 /lib/x86_64-linux-gnu/libc.so.6 libc.patch
+The executable exits non-zero for invalid options, missing arguments, more than
+two positional arguments, unreadable inputs, invalid ELF files, and expected
+patching failures.
 
-$ readelf -d libc.patch | grep SONAME
-#  0x000000000000000e (SONAME)             Library soname: [libc.so.217]
+## Library usage
 
-```
-
-### As Ruby library
-```rb
+```ruby
 require 'patchelf'
 
-patcher = PatchELF::Patcher.new('/bin/ls')
-patcher.interpreter
-#=> "/lib64/ld-linux-x86-64.so.2"
+patcher = PatchELF::Patcher.new('/path/to/input.elf', on_error: :exception)
+puts patcher.interpreter
+puts patcher.needed
 
-patcher.interpreter = '/lib/AAAA.so.2'
-patcher.interpreter
-#=> "/lib/AAAA.so.2"
-
-patcher.save('ls.patch')
-
-# $ file ls.patch
-# ls.patch: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib/AAAA.so.2, for GNU/Linux 3.2.0, BuildID[sha1]=9567f9a28e66f4d7ec4baf31cfbf68d0410f0ae6, stripped
-
+patcher.interpreter = '/new/dynamic/loader'
+patcher.runpath = '$ORIGIN/../lib'
+patcher.save('/path/to/output.elf', patchelf_compatible: true)
 ```
 
-## Environment
+`on_error` controls how missing ELF segments and tags are handled:
 
-patchelf.rb is implemented in pure Ruby, so it should work in all environments include Linux, macOS, and Windows!
+- `:log` logs a warning and returns `nil`.
+- `:silent` returns `nil` without logging.
+- `:exception` raises a `PatchELF` exception.
 
-## Project Authors
+`Patcher#save` provides two rewriting strategies:
 
-The git history remains the definitive record of all contributions.
+| Strategy | Intended use | Current mutation support |
+| --- | --- | --- |
+| Default | General-purpose rewriting | Interpreter, needed libraries, RPATH/RUNPATH, and SONAME |
+| `patchelf_compatible: true` | Layout behavior closer to NixOS/patchelf | Interpreter and RPATH/RUNPATH |
 
-### Original Author and Project Founder
+The compatible saver does not yet implement needed-library or SONAME changes.
+Some ELF layouts also require growth operations that are not implemented and
+raise `NotImplementedError`. The CLI currently uses the default saver; use the
+Ruby API when compatible layout behavior is required.
 
-* david942j (@david942j)
+A patcher keeps its input file open for the lifetime of the object. Avoid
+retaining patcher instances in long-running processes after their work is
+complete.
 
-### Maintainers
+Fixture coverage is primarily x86-64, with a 32-bit x86 regression fixture and
+unit coverage for architecture-specific page sizes. Validate rewritten binaries
+on every target architecture before distributing them.
 
-* Homebrew maintainers
-* david942j (@david942j)
+Full API documentation is available on
+[RubyDoc](https://www.rubydoc.info/gems/patchelf).
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, test commands, fixture policy,
+and the release-quality checks run in CI.
+
+Bug reports and feature requests belong in
+[GitHub Issues](https://github.com/Homebrew/patchelf.rb/issues).
+
+## Security
+
+Please report suspected vulnerabilities through
+[GitHub private vulnerability reporting](https://github.com/Homebrew/patchelf.rb/security/advisories/new),
+following [Homebrew's security policy](https://github.com/Homebrew/.github/security/policy).
+Do not disclose a suspected vulnerability in a public issue before maintainers
+have had a reasonable opportunity to investigate it.
+
+## Authors and maintainers
+
+The Git history is the definitive record of contributions.
+
+- Original author and project founder: david942j (`@david942j`)
+- Maintainers: Homebrew maintainers and david942j
+
+## License
+
+The gem is available under the [MIT License](LICENSE). Historical third-party
+test fixtures retain their upstream terms, documented in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
